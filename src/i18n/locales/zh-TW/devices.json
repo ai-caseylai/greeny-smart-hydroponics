@@ -1,0 +1,9 @@
+{
+  "title": "設備控制",
+  "online": "在線",
+  "offline": "離線",
+  "lastSeen": "最後上報",
+  "notConnected": "未連線",
+  "settings": "設定",
+  "restart": "重啟"
+}

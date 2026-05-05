@@ -1,0 +1,70 @@
+{
+  "title": "系統設置",
+  "wifi": {
+    "title": "Wi-Fi 網絡設置",
+    "ssid": "網絡名稱 (SSID)",
+    "password": "密碼",
+    "autoConnect": "自動連接"
+  },
+  "ai": {
+    "title": "AI 模型設置",
+    "model": "模型選擇",
+    "temperature": "Temperature",
+    "enabled": "啟用 AI 分析"
+  },
+  "mqtt": {
+    "title": "MQTT 伺服器設置",
+    "host": "伺服器位址",
+    "port": "端口",
+    "topic": "訂閱主題",
+    "qos": "QoS"
+  },
+  "notification": {
+    "title": "通知設置",
+    "email": "Email 通知",
+    "emailAddr": "通知信箱",
+    "push": "推播通知",
+    "alert": "警報通知"
+  },
+  "maintenance": {
+    "title": "系統維護",
+    "phRange": "pH 閾值範圍",
+    "ecMax": "EC 上限 (μS/cm)",
+    "tempRange": "水溫範圍 (°C)",
+    "doMin": "DO 最低值 (mg/L)",
+    "save": "儲存設定",
+    "reset": "重置預設"
+  },
+  "system": {
+    "title": "系統資訊",
+    "systemName": "系統名稱",
+    "version": "系統版本",
+    "firmware": "韌體版本",
+    "uptime": "運行時間",
+    "dbSize": "資料庫大小",
+    "connectedDevices": "連接設備數",
+    "lastSync": "最後同步",
+    "checkUpdate": "檢查更新"
+  },
+  "workbuddy": {
+    "title": "WorkBuddy 整合",
+    "apiUrl": "API 網址",
+    "apiKey": "API 金鑰",
+    "connectionStatus": "連線狀態",
+    "connected": "已連線",
+    "disconnected": "未連線",
+    "whatsappEnabled": "啟用 WhatsApp 通知",
+    "notifyCritical": "通知嚴重告警",
+    "notifyWarning": "通知警告",
+    "automations": "自動化任務",
+    "autoDailyReport": "每日環境報告",
+    "autoEnvCheck": "定時環境檢查",
+    "autoNutrientReminder": "營養補充提醒",
+    "autoHarvestReminder": "採收提醒",
+    "autoCustom": "自定義任務",
+    "noAutomations": "尚無自動化任務",
+    "addAutomation": "新增自動化",
+    "lastRun": "上次執行",
+    "never": "從未"
+  }
+}

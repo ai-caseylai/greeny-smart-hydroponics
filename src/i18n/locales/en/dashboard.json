@@ -1,0 +1,15 @@
+{
+  "title": "Dashboard",
+  "onlineDevices": "Online Devices",
+  "todayAlerts": "Today's Alerts",
+  "avgPH": "Avg pH",
+  "avgTemp": "Today's Temp",
+  "trend7d": "7-Day Water Quality Trend",
+  "deviceDist": "Device Status Distribution",
+  "deviceStatus": "Device Status",
+  "deviceId": "Device ID",
+  "deviceName": "Name",
+  "location": "Location",
+  "lastReport": "Last Report",
+  "noData": "Unable to load data"
+}

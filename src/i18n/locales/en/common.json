@@ -1,0 +1,51 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "waterQuality": "Water Quality",
+    "deviceControl": "Device Control",
+    "racks": "Rack Management",
+    "chat": "Smart Records",
+    "settings": "Settings"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "create": "Create",
+    "loading": "Loading...",
+    "logout": "Logout",
+    "confirm": "Confirm",
+    "search": "Search",
+    "back": "Back",
+    "submit": "Submit",
+    "test": "Test Connection",
+    "run": "Run",
+    "enable": "Enable",
+    "disable": "Disable"
+  },
+  "status": {
+    "online": "Online",
+    "offline": "Offline",
+    "warning": "Alarm",
+    "alarm": "Alarm",
+    "maintenance": "Maintenance",
+    "active": "Running",
+    "inactive": "Disabled",
+    "normal": "Normal",
+    "abnormal": "Abnormal"
+  },
+  "time": {
+    "secondsAgo": "{{count}} seconds ago",
+    "minutesAgo": "{{count}} minute(s) ago",
+    "hoursAgo": "{{count}} hour(s) ago",
+    "daysAgo": "{{count}} day(s) ago"
+  },
+  "brand": {
+    "name": "Greeny",
+    "full": "Greeny Smart Hydroponic Control System",
+    "subtitle": "Smart Hydroponic Control System"
+  }
+}

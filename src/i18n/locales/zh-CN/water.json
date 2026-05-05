@@ -1,0 +1,19 @@
+{
+  "title": "水质监测",
+  "allDevices": "所有设备",
+  "ph": "pH 值",
+  "ec": "EC 电导度",
+  "waterTemp": "水温",
+  "do": "溶氧量 (DO)",
+  "unitEC": "μS/cm",
+  "unitTemp": "°C",
+  "unitDO": "mg/L",
+  "trend24h": "24小时水质变化趋势",
+  "dataDetail": "数据详情",
+  "waterLevel": "水位",
+  "time": "时间",
+  "page": "第 {{current}}/{{total}} 页",
+  "totalRecords": "共 {{count}} 笔",
+  "prev": "上一页",
+  "next": "下一页"
+}

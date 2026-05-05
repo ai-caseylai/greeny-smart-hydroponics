@@ -1,0 +1,15 @@
+{
+  "title": "總覽",
+  "onlineDevices": "在線設備",
+  "todayAlerts": "今日報警",
+  "avgPH": "平均pH值",
+  "avgTemp": "今日溫度",
+  "trend7d": "7日水質趨勢",
+  "deviceDist": "設備狀態分佈",
+  "deviceStatus": "設備狀態",
+  "deviceId": "設備 ID",
+  "deviceName": "名稱",
+  "location": "位置",
+  "lastReport": "最後上報",
+  "noData": "無法載入數據"
+}

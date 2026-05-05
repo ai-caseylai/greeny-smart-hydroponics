@@ -1,0 +1,8 @@
+-- Add new sensor fields to telemetry: NDVI, multi-spectrum, relays
+ALTER TABLE telemetry ADD COLUMN ndvi REAL NOT NULL DEFAULT 0.0;
+ALTER TABLE telemetry ADD COLUMN spectral_red REAL NOT NULL DEFAULT 0.0;
+ALTER TABLE telemetry ADD COLUMN spectral_green REAL NOT NULL DEFAULT 0.0;
+ALTER TABLE telemetry ADD COLUMN spectral_blue REAL NOT NULL DEFAULT 0.0;
+ALTER TABLE telemetry ADD COLUMN spectral_nir REAL NOT NULL DEFAULT 0.0;
+ALTER TABLE telemetry ADD COLUMN relay1 INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE telemetry ADD COLUMN relay2 INTEGER NOT NULL DEFAULT 0;

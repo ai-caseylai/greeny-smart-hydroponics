@@ -1,0 +1,9 @@
+{
+  "title": "设备控制",
+  "online": "在线",
+  "offline": "离线",
+  "lastSeen": "最后上报",
+  "notConnected": "未连线",
+  "settings": "设定",
+  "restart": "重启"
+}

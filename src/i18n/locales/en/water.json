@@ -1,0 +1,19 @@
+{
+  "title": "Water Quality",
+  "allDevices": "All Devices",
+  "ph": "pH Value",
+  "ec": "EC Conductivity",
+  "waterTemp": "Water Temp",
+  "do": "Dissolved Oxygen (DO)",
+  "unitEC": "μS/cm",
+  "unitTemp": "°C",
+  "unitDO": "mg/L",
+  "trend24h": "24-Hour Water Quality Trend",
+  "dataDetail": "Data Details",
+  "waterLevel": "Water Level",
+  "time": "Time",
+  "page": "Page {{current}}/{{total}}",
+  "totalRecords": "{{count}} records",
+  "prev": "Previous",
+  "next": "Next"
+}

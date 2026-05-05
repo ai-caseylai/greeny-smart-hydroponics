@@ -1,0 +1,70 @@
+{
+  "title": "Settings",
+  "wifi": {
+    "title": "Wi-Fi Settings",
+    "ssid": "Network Name (SSID)",
+    "password": "Password",
+    "autoConnect": "Auto Connect"
+  },
+  "ai": {
+    "title": "AI Model Settings",
+    "model": "Model Selection",
+    "temperature": "Temperature",
+    "enabled": "Enable AI Analysis"
+  },
+  "mqtt": {
+    "title": "MQTT Server Settings",
+    "host": "Server Address",
+    "port": "Port",
+    "topic": "Subscribe Topic",
+    "qos": "QoS"
+  },
+  "notification": {
+    "title": "Notification Settings",
+    "email": "Email Notification",
+    "emailAddr": "Notification Email",
+    "push": "Push Notification",
+    "alert": "Alert Notification"
+  },
+  "maintenance": {
+    "title": "System Maintenance",
+    "phRange": "pH Threshold Range",
+    "ecMax": "EC Upper Limit (μS/cm)",
+    "tempRange": "Water Temp Range (°C)",
+    "doMin": "DO Minimum (mg/L)",
+    "save": "Save Settings",
+    "reset": "Reset to Default"
+  },
+  "system": {
+    "title": "System Info",
+    "systemName": "System Name",
+    "version": "System Version",
+    "firmware": "Firmware Version",
+    "uptime": "Uptime",
+    "dbSize": "Database Size",
+    "connectedDevices": "Connected Devices",
+    "lastSync": "Last Sync",
+    "checkUpdate": "Check for Updates"
+  },
+  "workbuddy": {
+    "title": "WorkBuddy Integration",
+    "apiUrl": "API URL",
+    "apiKey": "API Key",
+    "connectionStatus": "Connection Status",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "whatsappEnabled": "Enable WhatsApp Notification",
+    "notifyCritical": "Notify Critical Alerts",
+    "notifyWarning": "Notify Warnings",
+    "automations": "Automation Tasks",
+    "autoDailyReport": "Daily Environment Report",
+    "autoEnvCheck": "Scheduled Environment Check",
+    "autoNutrientReminder": "Nutrient Supplement Reminder",
+    "autoHarvestReminder": "Harvest Reminder",
+    "autoCustom": "Custom Task",
+    "noAutomations": "No automation tasks yet",
+    "addAutomation": "Add Automation",
+    "lastRun": "Last Run",
+    "never": "Never"
+  }
+}

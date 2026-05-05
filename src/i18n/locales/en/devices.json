@@ -1,0 +1,9 @@
+{
+  "title": "Device Control",
+  "online": "Online",
+  "offline": "Offline",
+  "lastSeen": "Last Report",
+  "notConnected": "Not Connected",
+  "settings": "Settings",
+  "restart": "Restart"
+}

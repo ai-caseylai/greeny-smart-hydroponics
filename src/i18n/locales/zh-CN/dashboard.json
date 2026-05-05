@@ -1,0 +1,15 @@
+{
+  "title": "总览",
+  "onlineDevices": "在线设备",
+  "todayAlerts": "今日报警",
+  "avgPH": "平均pH值",
+  "avgTemp": "今日温度",
+  "trend7d": "7日水质趋势",
+  "deviceDist": "设备状态分布",
+  "deviceStatus": "设备状态",
+  "deviceId": "设备 ID",
+  "deviceName": "名称",
+  "location": "位置",
+  "lastReport": "最后上报",
+  "noData": "无法载入数据"
+}

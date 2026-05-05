@@ -1,0 +1,51 @@
+{
+  "nav": {
+    "dashboard": "总览",
+    "waterQuality": "水质监测",
+    "deviceControl": "设备控制",
+    "racks": "水耕架管理",
+    "chat": "智能记录",
+    "settings": "系统设置"
+  },
+  "actions": {
+    "refresh": "重新整理",
+    "save": "存储",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "add": "新增",
+    "create": "建立",
+    "loading": "载入中...",
+    "logout": "登出",
+    "confirm": "确认",
+    "search": "搜索",
+    "back": "返回",
+    "submit": "送出",
+    "test": "测试连线",
+    "run": "执行",
+    "enable": "启用",
+    "disable": "停用"
+  },
+  "status": {
+    "online": "在线",
+    "offline": "离线",
+    "warning": "报警",
+    "alarm": "报警",
+    "maintenance": "维护中",
+    "active": "运行中",
+    "inactive": "停用",
+    "normal": "正常",
+    "abnormal": "异常"
+  },
+  "time": {
+    "secondsAgo": "{{count}} 秒前",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "daysAgo": "{{count}} 天前"
+  },
+  "brand": {
+    "name": "Greeny",
+    "full": "Greeny 智慧水耕控制系统",
+    "subtitle": "智慧水耕控制系统"
+  }
+}

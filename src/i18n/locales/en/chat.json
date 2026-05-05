@@ -1,0 +1,14 @@
+{
+  "title": "Smart Records",
+  "placeholder": "Ask AI assistant...",
+  "thinking": "Thinking...",
+  "welcome": "Hello! I'm the Greeny AI assistant. You can ask me about water quality, device status, nutrient management, and more, or use the quick actions below.",
+  "quickActions": {
+    "watering": "Watering",
+    "repot": "Repotting",
+    "health": "Plant Health",
+    "disease": "Plant Disease",
+    "pruning": "Pruning",
+    "nutrition": "Nutrition"
+  }
+}
