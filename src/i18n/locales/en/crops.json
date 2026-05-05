@@ -1,0 +1,93 @@
+{
+  "title": "Crop Management",
+  "subtitle": "Seedling Entry & Harvest Tracking",
+  "newSeedling": "New Seedling",
+  "stats": {
+    "growing": "Growing",
+    "ready": "Ready",
+    "harvested": "Harvested"
+  },
+  "tabs": {
+    "seedlings": "Seedlings",
+    "harvests": "Harvests"
+  },
+  "filter": {
+    "all": "All",
+    "growing": "Growing",
+    "ready": "Ready",
+    "harvested": "Harvested",
+    "failed": "Failed"
+  },
+  "form": {
+    "office": "Office",
+    "rack": "Rack",
+    "variety": "Variety",
+    "quantity": "Quantity",
+    "expectedDays": "Expected Days",
+    "notes": "Notes",
+    "varietyPlaceholder": "e.g. Lettuce",
+    "planting": "Planting...",
+    "plant": "Plant",
+    "seedlingEntry": "New Seedling Entry"
+  },
+  "harvest": {
+    "title": "Harvest",
+    "quantity": "Harvest Quantity",
+    "quality": "Quality",
+    "qualityExcellent": "Excellent",
+    "qualityGood": "Good",
+    "qualityFair": "Fair",
+    "qualityPoor": "Poor",
+    "notes": "Notes",
+    "confirm": "Confirm Harvest",
+    "recording": "Recording...",
+    "success": "Harvest recorded!",
+    "planted": "planted",
+    "days": "days",
+    "day": "day",
+    "expected": "expected"
+  },
+  "calendar": {
+    "title": "Seedling & Harvest Calendar",
+    "today": "Today",
+    "seedling": "Seedling",
+    "expectedHarvest": "Expected Harvest",
+    "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  },
+  "table": {
+    "date": "Date",
+    "variety": "Variety",
+    "quantity": "Quantity",
+    "quality": "Quality",
+    "rack": "Rack",
+    "office": "Office",
+    "notes": "Notes"
+  },
+  "actions": {
+    "harvest": "Harvest",
+    "markReady": "Mark Ready",
+    "delete": "Delete",
+    "confirmDelete": "Are you sure?"
+  },
+  "status": {
+    "growing": "Growing",
+    "ready": "Ready",
+    "harvested": "Harvested",
+    "failed": "Failed"
+  },
+  "messages": {
+    "seedlingSuccess": "Seedling added successfully!",
+    "noSeedlings": "No seedling records",
+    "noHarvests": "No harvest records",
+    "noHarvestsHint": "Click \"Harvest\" in seedling records to log a harvest",
+    "enterVariety": "Please enter variety",
+    "seedlingFailed": "Add seedling failed: ",
+    "unknownError": "Unknown error",
+    "enterQuantity": "Please enter harvest quantity",
+    "harvestFailed": "Harvest record failed: ",
+    "updateFailed": "Update failed: ",
+    "deleteFailed": "Delete failed: ",
+    "seededAt": "Seeded",
+    "dayNum": "Day"
+  }
+}

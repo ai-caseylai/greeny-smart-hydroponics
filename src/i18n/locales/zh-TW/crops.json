@@ -1,0 +1,93 @@
+{
+  "title": "農作物管理",
+  "subtitle": "入苗及收成管理",
+  "newSeedling": "入苗",
+  "stats": {
+    "growing": "生長中",
+    "ready": "可收成",
+    "harvested": "已收成"
+  },
+  "tabs": {
+    "seedlings": "入苗記錄",
+    "harvests": "收成記錄"
+  },
+  "filter": {
+    "all": "全部",
+    "growing": "生長中",
+    "ready": "可收成",
+    "harvested": "已收成",
+    "failed": "失敗"
+  },
+  "form": {
+    "office": "辦公室",
+    "rack": "耕架",
+    "variety": "品種",
+    "quantity": "數量",
+    "expectedDays": "預計天數",
+    "notes": "備註",
+    "varietyPlaceholder": "例：生菜",
+    "planting": "入苗中...",
+    "plant": "入苗",
+    "seedlingEntry": "入苗記錄"
+  },
+  "harvest": {
+    "title": "收成",
+    "quantity": "收成數量",
+    "quality": "品質",
+    "qualityExcellent": "優",
+    "qualityGood": "良",
+    "qualityFair": "可",
+    "qualityPoor": "差",
+    "notes": "備註",
+    "confirm": "確認收成",
+    "recording": "記錄中...",
+    "success": "收成成功！",
+    "planted": "種植",
+    "days": "天",
+    "day": "天",
+    "expected": "預計"
+  },
+  "calendar": {
+    "title": "入苗收成日曆",
+    "today": "今天",
+    "seedling": "入苗",
+    "expectedHarvest": "預計收成",
+    "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+  },
+  "table": {
+    "date": "日期",
+    "variety": "品種",
+    "quantity": "數量",
+    "quality": "品質",
+    "rack": "耕架",
+    "office": "辦公室",
+    "notes": "備註"
+  },
+  "actions": {
+    "harvest": "收成",
+    "markReady": "標記可收成",
+    "delete": "刪除",
+    "confirmDelete": "確定刪除？"
+  },
+  "status": {
+    "growing": "生長中",
+    "ready": "可收成",
+    "harvested": "已收成",
+    "failed": "失敗"
+  },
+  "messages": {
+    "seedlingSuccess": "入苗成功！",
+    "noSeedlings": "暫無入苗記錄",
+    "noHarvests": "暫無收成記錄",
+    "noHarvestsHint": "在「入苗記錄」中按「收成」按鈕來記錄收成",
+    "enterVariety": "請輸入品種",
+    "seedlingFailed": "入苗失敗：",
+    "unknownError": "未知錯誤",
+    "enterQuantity": "請輸入收成數量",
+    "harvestFailed": "收成記錄失敗：",
+    "updateFailed": "更新失敗：",
+    "deleteFailed": "刪除失敗：",
+    "seededAt": "入苗",
+    "dayNum": "第"
+  }
+}

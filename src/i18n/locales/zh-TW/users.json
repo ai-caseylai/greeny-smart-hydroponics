@@ -1,0 +1,42 @@
+{
+  "title": "人員管理",
+  "addUser": "新增用戶",
+  "editUser": "編輯用戶",
+  "newUser": "新增用戶",
+  "username": "帳號",
+  "password": "密碼",
+  "displayName": "顯示名稱",
+  "role": "角色",
+  "office": "辦公室",
+  "roles": {
+    "superadmin": "系統管理員",
+    "officeAdmin": "辦公室管理員",
+    "staff": "一般員工"
+  },
+  "roleDesc": {
+    "superadmin": "查看所有辦公室、管理用戶、系統設定",
+    "officeAdmin": "管理所屬辦公室的設備、員工和數據",
+    "staff": "僅能查看所屬辦公室的數據"
+  },
+  "actions": {
+    "create": "建立",
+    "cancel": "取消",
+    "deactivate": "停用",
+    "reactivate": "重新啟用",
+    "save": "儲存",
+    "saving": "儲存中..."
+  },
+  "resetPassword": "重設密碼",
+  "passwordHint": "留空不更改",
+  "show": "顯示",
+  "hide": "隱藏",
+  "inactive": "已停用",
+  "messages": {
+    "confirmDeactivate": "確定要停用此用戶？",
+    "addFailed": "新增失敗：",
+    "deactivateFailed": "停用失敗：",
+    "reactivateFailed": "重新啟用失敗：",
+    "updateFailed": "更新失敗",
+    "unknownError": "未知錯誤"
+  }
+}

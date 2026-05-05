@@ -11,6 +11,8 @@ import zhTWRacks from './locales/zh-TW/racks.json'
 import zhTWAlerts from './locales/zh-TW/alerts.json'
 import zhTWChat from './locales/zh-TW/chat.json'
 import zhTWSettings from './locales/zh-TW/settings.json'
+import zhTWCrops from './locales/zh-TW/crops.json'
+import zhTWUsers from './locales/zh-TW/users.json'
 
 import zhCNCommon from './locales/zh-CN/common.json'
 import zhCNAuth from './locales/zh-CN/auth.json'
@@ -21,6 +23,8 @@ import zhCNRacks from './locales/zh-CN/racks.json'
 import zhCNAlerts from './locales/zh-CN/alerts.json'
 import zhCNChat from './locales/zh-CN/chat.json'
 import zhCNSettings from './locales/zh-CN/settings.json'
+import zhCNCrops from './locales/zh-CN/crops.json'
+import zhCNUsers from './locales/zh-CN/users.json'
 
 import enCommon from './locales/en/common.json'
 import enAuth from './locales/en/auth.json'
@@ -31,8 +35,10 @@ import enRacks from './locales/en/racks.json'
 import enAlerts from './locales/en/alerts.json'
 import enChat from './locales/en/chat.json'
 import enSettings from './locales/en/settings.json'
+import enCrops from './locales/en/crops.json'
+import enUsers from './locales/en/users.json'
 
-const ns = ['common', 'auth', 'dashboard', 'water', 'devices', 'racks', 'alerts', 'chat', 'settings']
+const ns = ['common', 'auth', 'dashboard', 'water', 'devices', 'racks', 'alerts', 'chat', 'settings', 'crops', 'users']
 
 i18n
   .use(LanguageDetector)
@@ -47,16 +53,19 @@ i18n
         common: zhTWCommon, auth: zhTWAuth, dashboard: zhTWDashboard,
         water: zhTWWater, devices: zhTWDevices, racks: zhTWRacks,
         alerts: zhTWAlerts, chat: zhTWChat, settings: zhTWSettings,
+        crops: zhTWCrops, users: zhTWUsers,
       },
       'zh-CN': {
         common: zhCNCommon, auth: zhCNAuth, dashboard: zhCNDashboard,
         water: zhCNWater, devices: zhCNDevices, racks: zhCNRacks,
         alerts: zhCNAlerts, chat: zhCNChat, settings: zhCNSettings,
+        crops: zhCNCrops, users: zhCNUsers,
       },
       en: {
         common: enCommon, auth: enAuth, dashboard: enDashboard,
         water: enWater, devices: enDevices, racks: enRacks,
         alerts: enAlerts, chat: enChat, settings: enSettings,
+        crops: enCrops, users: enUsers,
       },
     },
     interpolation: { escapeValue: false },

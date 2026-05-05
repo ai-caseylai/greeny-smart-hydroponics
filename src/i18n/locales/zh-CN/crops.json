@@ -1,0 +1,93 @@
+{
+  "title": "农作物管理",
+  "subtitle": "入苗及收成管理",
+  "newSeedling": "入苗",
+  "stats": {
+    "growing": "生长中",
+    "ready": "可收成",
+    "harvested": "已收成"
+  },
+  "tabs": {
+    "seedlings": "入苗记录",
+    "harvests": "收成记录"
+  },
+  "filter": {
+    "all": "全部",
+    "growing": "生长中",
+    "ready": "可收成",
+    "harvested": "已收成",
+    "failed": "失败"
+  },
+  "form": {
+    "office": "办公室",
+    "rack": "耕架",
+    "variety": "品种",
+    "quantity": "数量",
+    "expectedDays": "预计天数",
+    "notes": "备注",
+    "varietyPlaceholder": "例：生菜",
+    "planting": "入苗中...",
+    "plant": "入苗",
+    "seedlingEntry": "入苗记录"
+  },
+  "harvest": {
+    "title": "收成",
+    "quantity": "收成数量",
+    "quality": "品质",
+    "qualityExcellent": "优",
+    "qualityGood": "良",
+    "qualityFair": "可",
+    "qualityPoor": "差",
+    "notes": "备注",
+    "confirm": "确认收成",
+    "recording": "记录中...",
+    "success": "收成成功！",
+    "planted": "种植",
+    "days": "天",
+    "day": "天",
+    "expected": "预计"
+  },
+  "calendar": {
+    "title": "入苗收成日历",
+    "today": "今天",
+    "seedling": "入苗",
+    "expectedHarvest": "预计收成",
+    "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+  },
+  "table": {
+    "date": "日期",
+    "variety": "品种",
+    "quantity": "数量",
+    "quality": "品质",
+    "rack": "耕架",
+    "office": "办公室",
+    "notes": "备注"
+  },
+  "actions": {
+    "harvest": "收成",
+    "markReady": "标记可收成",
+    "delete": "删除",
+    "confirmDelete": "确定删除？"
+  },
+  "status": {
+    "growing": "生长中",
+    "ready": "可收成",
+    "harvested": "已收成",
+    "failed": "失败"
+  },
+  "messages": {
+    "seedlingSuccess": "入苗成功！",
+    "noSeedlings": "暂无入苗记录",
+    "noHarvests": "暂无收成记录",
+    "noHarvestsHint": "在「入苗记录」中按「收成」按钮来记录收成",
+    "enterVariety": "请输入品种",
+    "seedlingFailed": "入苗失败：",
+    "unknownError": "未知错误",
+    "enterQuantity": "请输入收成数量",
+    "harvestFailed": "收成记录失败：",
+    "updateFailed": "更新失败：",
+    "deleteFailed": "删除失败：",
+    "seededAt": "入苗",
+    "dayNum": "第"
+  }
+}

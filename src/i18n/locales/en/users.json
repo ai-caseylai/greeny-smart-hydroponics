@@ -1,0 +1,42 @@
+{
+  "title": "Personnel Management",
+  "addUser": "Add User",
+  "editUser": "Edit User",
+  "newUser": "New User",
+  "username": "Username",
+  "password": "Password",
+  "displayName": "Display Name",
+  "role": "Role",
+  "office": "Office",
+  "roles": {
+    "superadmin": "Super Admin",
+    "officeAdmin": "Office Admin",
+    "staff": "Staff"
+  },
+  "roleDesc": {
+    "superadmin": "Full access to all offices, user management, system configuration",
+    "officeAdmin": "Manage own office racks, staff, and view office data",
+    "staff": "Read-only access to own office data"
+  },
+  "actions": {
+    "create": "Create",
+    "cancel": "Cancel",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "save": "Save",
+    "saving": "Saving..."
+  },
+  "resetPassword": "Reset Password",
+  "passwordHint": "Leave blank to keep",
+  "show": "Show",
+  "hide": "Hide",
+  "inactive": "Inactive",
+  "messages": {
+    "confirmDeactivate": "Deactivate this user?",
+    "addFailed": "Add failed: ",
+    "deactivateFailed": "Deactivate failed: ",
+    "reactivateFailed": "Reactivate failed: ",
+    "updateFailed": "Update failed",
+    "unknownError": "Unknown error"
+  }
+}

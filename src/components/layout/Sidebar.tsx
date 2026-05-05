@@ -14,12 +14,10 @@ import {
 import { cn } from '../../lib/utils'
 import { useOffice } from '../../context/OfficeContext'
 import { useOffices } from '../../hooks/useOffices'
-import { useChineseText } from '../../hooks/useChineseText'
 import { AquaGreenLogo } from '../AquaGreenLogo'
 
 export function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
   const { t } = useTranslation()
-  const ct = useChineseText()
   const { selectedOfficeId, setSelectedOfficeId, lockedOfficeId, userRole } = useOffice()
   const { offices } = useOffices()
 
@@ -37,7 +35,6 @@ export function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
       <div className="flex h-14 items-center justify-between px-4 border-b border-white/10">
         <div className="flex items-center">
           <AquaGreenLogo className="h-9 w-auto" white />
-          <span className="ml-2 text-xs text-green-300 font-medium leading-tight hidden sm:inline">{ct(t('brand.subtitle'))}</span>
         </div>
         <button onClick={onNavClick} className="lg:hidden text-green-300 hover:text-white p-1">
           <X className="h-5 w-5" />

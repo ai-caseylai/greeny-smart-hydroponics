@@ -16,37 +16,16 @@ interface UserRow {
   created_at: number
 }
 
-const roleConfig = {
-  superadmin: {
-    label: 'Super Admin',
-    labelZh: '系統管理員',
-    icon: Shield,
-    color: 'bg-purple-100 text-purple-700 border-purple-200',
-    dot: 'bg-purple-500',
-    level: 3,
-    desc: 'Full access to all offices, user management, system configuration',
-    descZh: '查看所有辦公室、管理用戶、系統設定',
-  },
-  office_admin: {
-    label: 'Office Admin',
-    labelZh: '辦公室管理員',
-    icon: Building2,
-    color: 'bg-blue-100 text-blue-700 border-blue-200',
-    dot: 'bg-blue-500',
-    level: 2,
-    desc: 'Manage own office racks, staff, and view office data',
-    descZh: '管理所屬辦公室的設備、員工和數據',
-  },
-  staff: {
-    label: 'Staff',
-    labelZh: '一般員工',
-    icon: Eye,
-    color: 'bg-gray-100 text-gray-700 border-gray-200',
-    dot: 'bg-gray-400',
-    level: 1,
-    desc: 'Read-only access to own office data',
-    descZh: '僅能查看所屬辦公室的數據',
-  },
+const roleIcons = {
+  superadmin: Shield,
+  office_admin: Building2,
+  staff: Eye,
+}
+
+const roleColors = {
+  superadmin: { color: 'bg-purple-100 text-purple-700 border-purple-200', dot: 'bg-purple-500' },
+  office_admin: { color: 'bg-blue-100 text-blue-700 border-blue-200', dot: 'bg-blue-500' },
+  staff: { color: 'bg-gray-100 text-gray-700 border-gray-200', dot: 'bg-gray-400' },
 }
 
 function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
@@ -56,6 +35,7 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
   onClose: () => void
   onSaved: () => void
 }) {
+  const { t } = useTranslation('users')
   const ct = useChineseText()
   const [form, setForm] = useState({
     display_name: user.display_name || '',
@@ -86,7 +66,7 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
       onSaved()
       onClose()
     } catch (err) {
-      alert(ct('更新失敗'))
+      alert(t('messages.updateFailed'))
     } finally {
       setSaving(false)
     }
@@ -96,33 +76,33 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold">{ct('編輯用戶 / Edit User')}</h3>
+          <h3 className="text-lg font-bold">{t('editUser')}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">{ct('Username 帳號')}</label>
+            <label className="block text-xs text-gray-500 mb-1">{t('username')}</label>
             <input value={user.username} disabled className="w-full rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400" />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">{ct('Display Name 顯示名稱')}</label>
+            <label className="block text-xs text-gray-500 mb-1">{t('displayName')}</label>
             <input value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })}
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
           </div>
           {userRole === 'superadmin' && (
             <>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">{ct('Role 角色')}</label>
+                <label className="block text-xs text-gray-500 mb-1">{t('role')}</label>
                 <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
-                  <option value="staff">{ct('Staff / 一般員工')}</option>
-                  <option value="office_admin">{ct('Office Admin / 辦公室管理員')}</option>
-                  <option value="superadmin">{ct('Super Admin / 系統管理員')}</option>
+                  <option value="staff">{t('roles.staff')}</option>
+                  <option value="office_admin">{t('roles.officeAdmin')}</option>
+                  <option value="superadmin">{t('roles.superadmin')}</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">{ct('Office 辦公室')}</label>
+                <label className="block text-xs text-gray-500 mb-1">{t('office')}</label>
                 <select value={form.office_id} onChange={e => setForm({ ...form, office_id: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
                   <option value="">-- None --</option>
@@ -137,19 +117,19 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
           <div className="border-t border-gray-100 pt-3">
             <div className="flex items-center gap-2 mb-2">
               <Key className="h-4 w-4 text-amber-500" />
-              <span className="text-sm font-medium text-gray-700">{ct('重設密碼 / Reset Password')}</span>
+              <span className="text-sm font-medium text-gray-700">{t('resetPassword')}</span>
             </div>
             <div className="flex gap-2">
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder={ct('留空不更改 / Leave blank to keep')}
+                placeholder={t('passwordHint')}
                 className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
               />
               <button type="button" onClick={() => setShowPassword(!showPassword)}
                 className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50">
-                {showPassword ? ct('隱藏') : ct('顯示')}
+                {showPassword ? t('hide') : t('show')}
               </button>
             </div>
           </div>
@@ -158,11 +138,11 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
         <div className="flex gap-2 mt-5">
           <button onClick={handleSave} disabled={saving}
             className="rounded-lg bg-[#00a65a] px-4 py-2 text-sm text-white hover:bg-[#00954f] disabled:opacity-50">
-            {saving ? ct('儲存中...') : ct('儲存 / Save')}
+            {saving ? t('actions.saving') : t('actions.save')}
           </button>
           <button onClick={onClose}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
-            {ct('取消 / Cancel')}
+            {t('actions.cancel')}
           </button>
         </div>
       </div>
@@ -171,8 +151,8 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
 }
 
 export default function UserManagementPage() {
+  const { t } = useTranslation('users')
   const ct = useChineseText()
-  const { t } = useTranslation('common')
   const { userRole, lockedOfficeId } = useOffice()
   const { offices } = useOffices()
   const [users, setUsers] = useState<UserRow[]>([])
@@ -207,17 +187,17 @@ export default function UserManagementPage() {
       setForm({ username: '', password: '', display_name: '', role: 'staff', office_id: '' })
       fetchUsers()
     } catch (err: any) {
-      alert(ct('新增失敗：') + (err.message || ct('未知錯誤')))
+      alert(t('messages.addFailed') + (err.message || t('messages.unknownError')))
     }
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm(ct('確定要停用此用戶？ / Deactivate this user?'))) return
+    if (!confirm(t('messages.confirmDeactivate'))) return
     try {
       await apiFetch(`/users/${id}`, { method: 'DELETE' })
       fetchUsers()
     } catch (err: any) {
-      alert(ct('停用失敗：') + (err.message || ct('未知錯誤')))
+      alert(t('messages.deactivateFailed') + (err.message || t('messages.unknownError')))
     }
   }
 
@@ -229,7 +209,7 @@ export default function UserManagementPage() {
       })
       fetchUsers()
     } catch (err: any) {
-      alert(ct('重新啟用失敗：') + (err.message || ct('未知錯誤')))
+      alert(t('messages.reactivateFailed') + (err.message || t('messages.unknownError')))
     }
   }
 
@@ -249,11 +229,22 @@ export default function UserManagementPage() {
 
   const officeMap = new Map(offices.map(o => [o.id, o.name]))
 
+  const roleKeyMap: Record<string, string> = {
+    superadmin: 'roles.superadmin',
+    office_admin: 'roles.officeAdmin',
+    staff: 'roles.staff',
+  }
+  const roleDescKeyMap: Record<string, string> = {
+    superadmin: 'roleDesc.superadmin',
+    office_admin: 'roleDesc.officeAdmin',
+    staff: 'roleDesc.staff',
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg sm:text-xl font-bold">{t('userManagement', { defaultValue: ct('Personnel Management / 人員管理') })}</h2>
+          <h2 className="text-lg sm:text-xl font-bold">{t('title')}</h2>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">Role Hierarchy: Super Admin &gt; Office Admin &gt; Staff</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
@@ -263,69 +254,64 @@ export default function UserManagementPage() {
               placeholder="Search..."
               className="w-full sm:w-48 rounded-lg border border-border pl-8 pr-3 py-1.5 text-sm outline-none focus:border-[#00a65a]" />
           </div>
-          {(
-            <button onClick={() => setShowAdd(!showAdd)}
-              className="flex items-center gap-1.5 rounded-lg bg-[#00a65a] px-3 py-1.5 text-sm text-white hover:bg-[#00954f]">
-              <Plus className="h-4 w-4" />{ct('Add User / 新增用戶')}
-            </button>
-          )}
+          <button onClick={() => setShowAdd(!showAdd)}
+            className="flex items-center gap-1.5 rounded-lg bg-[#00a65a] px-3 py-1.5 text-sm text-white hover:bg-[#00954f]">
+            <Plus className="h-4 w-4" />{t('addUser')}
+          </button>
         </div>
       </div>
 
-      {/* Role hierarchy cards */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {Object.entries(roleConfig).map(([role, cfg]) => {
-          const Icon = cfg.icon
-          const count = grouped[role as keyof typeof grouped]?.length || 0
+        {(['superadmin', 'office_admin', 'staff'] as const).map((role) => {
+          const Icon = roleIcons[role]
+          const cfg = roleColors[role]
+          const count = grouped[role]?.length || 0
           return (
             <div key={role} className={`rounded-xl border-2 p-5 ${cfg.color}`}>
               <div className="flex items-center gap-3 mb-2">
                 <Icon className="h-6 w-6" />
                 <div>
-                  <h3 className="font-bold">{cfg.label}</h3>
-                  <p className="text-xs opacity-80">{ct(cfg.labelZh)}</p>
+                  <h3 className="font-bold">{t(roleKeyMap[role])}</h3>
                 </div>
                 <span className="ml-auto text-2xl font-bold">{count}</span>
               </div>
-              <p className="text-xs opacity-70">{cfg.desc}</p>
-              <p className="text-xs opacity-70 mt-1">{ct(cfg.descZh)}</p>
+              <p className="text-xs opacity-70">{t(roleDescKeyMap[role])}</p>
             </div>
           )
         })}
       </div>
 
-      {/* Add user form */}
       {showAdd && (
         <form onSubmit={handleAdd} className="rounded-xl border border-[#00a65a]/30 bg-[#e8f5e9]/50 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{ct('New User / 新增用戶')}</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('newUser')}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:grid-cols-5">
             <div>
-              <label className="block text-[10px] text-gray-500 mb-1">{ct('Username 帳號')}</label>
+              <label className="block text-[10px] text-gray-500 mb-1">{t('username')}</label>
               <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" required />
             </div>
             <div>
-              <label className="block text-[10px] text-gray-500 mb-1">{ct('Password 密碼')}</label>
+              <label className="block text-[10px] text-gray-500 mb-1">{t('password')}</label>
               <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" required />
             </div>
             <div>
-              <label className="block text-[10px] text-gray-500 mb-1">{ct('Display Name 顯示名稱')}</label>
+              <label className="block text-[10px] text-gray-500 mb-1">{t('displayName')}</label>
               <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
             <div>
-              <label className="block text-[10px] text-gray-500 mb-1">{ct('Role 角色')}</label>
+              <label className="block text-[10px] text-gray-500 mb-1">{t('role')}</label>
               <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
-                <option value="staff">{ct('Staff / 一般員工')}</option>
-                {userRole === 'superadmin' && <option value="office_admin">{ct('Office Admin / 辦公室管理員')}</option>}
-                {userRole === 'superadmin' && <option value="superadmin">{ct('Super Admin / 系統管理員')}</option>}
+                <option value="staff">{t('roles.staff')}</option>
+                {userRole === 'superadmin' && <option value="office_admin">{t('roles.officeAdmin')}</option>}
+                {userRole === 'superadmin' && <option value="superadmin">{t('roles.superadmin')}</option>}
               </select>
             </div>
             {(userRole === 'superadmin' || form.role !== 'superadmin') && (
               <div>
-                <label className="block text-[10px] text-gray-500 mb-1">{ct('Office 辦公室')}</label>
+                <label className="block text-[10px] text-gray-500 mb-1">{t('office')}</label>
                 <select value={form.office_id} onChange={(e) => setForm({ ...form, office_id: e.target.value })}
                   className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
                   <option value="">-- Select --</option>
@@ -337,25 +323,25 @@ export default function UserManagementPage() {
             )}
           </div>
           <div className="flex gap-2 mt-3">
-            <button type="submit" className="rounded bg-[#00a65a] px-4 py-1.5 text-sm text-white hover:bg-[#00954f]">{ct('Create / 建立')}</button>
-            <button type="button" onClick={() => setShowAdd(false)} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50">{ct('Cancel')}</button>
+            <button type="submit" className="rounded bg-[#00a65a] px-4 py-1.5 text-sm text-white hover:bg-[#00954f]">{t('actions.create')}</button>
+            <button type="button" onClick={() => setShowAdd(false)} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50">{t('actions.cancel')}</button>
           </div>
         </form>
       )}
 
-      {/* User list by role */}
       {loading ? (
         <div className="text-gray-400 text-sm">Loading...</div>
       ) : (
-        Object.entries(grouped).map(([role, roleUsers]) => {
+        (['superadmin', 'office_admin', 'staff'] as const).map((role) => {
+          const roleUsers = grouped[role]
           if (roleUsers.length === 0) return null
-          const cfg = roleConfig[role as keyof typeof roleConfig]
-          const Icon = cfg.icon
+          const Icon = roleIcons[role]
+          const cfg = roleColors[role]
           return (
             <div key={role} className="rounded-xl border border-border bg-white shadow-sm overflow-hidden">
               <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-gray-50">
                 <Icon className="h-4 w-4" style={{ color: cfg.dot.replace('bg-', '') }} />
-                <h3 className="text-sm font-semibold text-gray-700">{cfg.label} ({ct(cfg.labelZh)})</h3>
+                <h3 className="text-sm font-semibold text-gray-700">{t(roleKeyMap[role])}</h3>
                 <span className="ml-auto text-xs text-gray-400">{roleUsers.length} users</span>
               </div>
               <div className="divide-y divide-border">
@@ -377,24 +363,22 @@ export default function UserManagementPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       {!u.active && (
-                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] text-red-600">{ct('Inactive / 已停用')}</span>
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] text-red-600">{t('inactive')}</span>
                       )}
-                      {(
-                        <button onClick={() => setEditingUser(u)}
-                          className="rounded p-1 text-gray-400 hover:text-blue-500" title={ct('Edit / 編輯')}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                      <button onClick={() => setEditingUser(u)}
+                        className="rounded p-1 text-gray-400 hover:text-blue-500">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
                       {!u.active && (userRole === 'superadmin' || userRole === 'office_admin') && (
                         <button onClick={() => handleReactivate(u.id)}
                           className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] text-green-600 hover:bg-green-100">
-                          {ct('Reactivate / 重新啟用')}
+                          {t('actions.reactivate')}
                         </button>
                       )}
                       {u.active && (userRole === 'superadmin' || (userRole === 'office_admin' && u.role === 'staff')) && (
                         <button onClick={() => handleDelete(u.id)}
                           className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-600 hover:bg-red-100">
-                          <Trash2 className="h-3 w-3" />{ct('停用')}
+                          <Trash2 className="h-3 w-3" />{t('actions.deactivate')}
                         </button>
                       )}
                     </div>
@@ -406,7 +390,6 @@ export default function UserManagementPage() {
         })
       )}
 
-      {/* Edit user modal */}
       {editingUser && (
         <EditUserModal
           user={editingUser}
