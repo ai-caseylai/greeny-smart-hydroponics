@@ -6,8 +6,10 @@ import DashboardPage from './pages/DashboardPage'
 import WaterQualityPage from './pages/WaterQualityPage'
 import AlertsPage from './pages/AlertsPage'
 import DeviceControlPage from './pages/DeviceControlPage'
+import UserManagementPage from './pages/UserManagementPage'
 import RackManagementPage from './pages/racks/RackManagementPage'
 import RackDetailPage from './pages/racks/RackDetailPage'
+import CropManagementPage from './pages/CropManagementPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (!getToken()) return <Navigate to="/login" replace />
@@ -37,6 +39,8 @@ export default function App() {
           <Route path="/racks" element={<RackManagementPage />} />
           <Route path="/racks/office/:officeId" element={<RackDetailPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
+          <Route path="/users" element={<UserManagementPage />} />
+          <Route path="/crops" element={<CropManagementPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

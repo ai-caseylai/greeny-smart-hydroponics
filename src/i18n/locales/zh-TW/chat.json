@@ -2,7 +2,7 @@
   "title": "智能記錄",
   "placeholder": "問問 AI 助手...",
   "thinking": "思考中...",
-  "welcome": "你好！我是 Greeny AI 助手。你可以問我關於水質、設備狀態、營養液調配等問題，或使用下方快捷按鈕。",
+  "welcome": "你好！我是 Greenie AI 助手。你可以問我關於水質、設備狀態、營養液調配等問題，或使用下方快捷按鈕。",
   "quickActions": {
     "watering": "澆水",
     "repot": "換盆",

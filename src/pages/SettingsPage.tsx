@@ -73,7 +73,7 @@ export default function SettingsPage() {
         {/* Wi-Fi */}
         <SettingsSection title={t('wifi.title')} icon={Wifi}>
           <SettingRow label={t('wifi.ssid')}>
-            <SettingInput value="GreenyFarm_5G" />
+            <SettingInput value="GreenieFarm_5G" />
           </SettingRow>
           <SettingRow label={t('wifi.password')}>
             <SettingInput value="********" type="password" />
@@ -179,7 +179,7 @@ export default function SettingsPage() {
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-gray-500">{t('system.systemName')}</span>
-              <span className="text-gray-700 font-medium">Greeny {t('common:brand.subtitle')}</span>
+              <span className="text-gray-700 font-medium">Greenie {t('common:brand.subtitle')}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-500">{t('system.version')}</span>
