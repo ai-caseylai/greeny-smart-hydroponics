@@ -4,8 +4,12 @@
     "waterQuality": "Water Quality",
     "deviceControl": "Device Control",
     "racks": "Rack Management",
+    "crops": "Crop Management",
+    "users": "Personnel Management",
     "chat": "Smart Records",
-    "settings": "Settings"
+    "settings": "Settings",
+    "manual": "User Manual",
+    "skillFile": "Skill File"
   },
   "actions": {
     "refresh": "Refresh",

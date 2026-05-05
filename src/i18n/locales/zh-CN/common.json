@@ -4,8 +4,12 @@
     "waterQuality": "水质监测",
     "deviceControl": "设备控制",
     "racks": "水耕架管理",
+    "crops": "农作物管理",
+    "users": "人员管理",
     "chat": "智能记录",
-    "settings": "系统设置"
+    "settings": "系统设置",
+    "manual": "使用手册",
+    "skillFile": "Skill 文件"
   },
   "actions": {
     "refresh": "重新整理",

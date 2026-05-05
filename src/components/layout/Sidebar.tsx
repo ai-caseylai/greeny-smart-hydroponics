@@ -28,8 +28,8 @@ export function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
     { to: '/water-quality', icon: Droplets, label: t('nav.waterQuality') },
     { to: '/device-control', icon: Cpu, label: t('nav.deviceControl') },
     { to: '/racks', icon: Warehouse, label: t('nav.racks') },
-    { to: '/crops', icon: Sprout, label: t('nav.crops', { defaultValue: '農作物管理' }) },
-    ...(userRole !== 'staff' ? [{ to: '/users', icon: Users, label: t('nav.users', { defaultValue: '人員管理' }) }] : []),
+    { to: '/crops', icon: Sprout, label: t('nav.crops') },
+    ...(userRole !== 'staff' ? [{ to: '/users', icon: Users, label: t('nav.users') }] : []),
   ]
 
   return (
@@ -37,7 +37,7 @@ export function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
       <div className="flex h-14 items-center justify-between px-4 border-b border-white/10">
         <div className="flex items-center">
           <AquaGreenLogo className="h-9 w-auto" white />
-          <span className="ml-2 text-xs text-green-300 font-medium leading-tight hidden sm:inline">{ct('水耕架管理系統')}</span>
+          <span className="ml-2 text-xs text-green-300 font-medium leading-tight hidden sm:inline">{ct(t('brand.subtitle'))}</span>
         </div>
         <button onClick={onNavClick} className="lg:hidden text-green-300 hover:text-white p-1">
           <X className="h-5 w-5" />
@@ -73,7 +73,7 @@ export function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
           className="flex items-center gap-3 rounded-lg px-3 py-2 text-xs text-green-300 hover:bg-white/10 hover:text-white transition-colors"
         >
           <FileText className="h-4 w-4" />
-          {ct('使用手冊 / Manual')}
+          {t('nav.manual')}
         </a>
         <a
           href="/greeny-skill.zip"
@@ -82,11 +82,11 @@ export function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
           className="flex items-center gap-3 rounded-lg px-3 py-2 text-xs text-green-300 hover:bg-white/10 hover:text-white transition-colors"
         >
           <Package className="h-4 w-4" />
-          {ct('Skill 文件')}
+          {t('nav.skillFile')}
         </a>
       </div>
       <div className="px-4 pb-3 text-[10px] text-green-400/50">
-        {ct('Greenie Smart Hydroponics')}
+        Greenie Smart Hydroponics
       </div>
     </aside>
   )
