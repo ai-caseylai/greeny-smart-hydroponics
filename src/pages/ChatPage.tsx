@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Send, Bot, User, Droplets, Leaf, Heart, Bug, Scissors, FlaskConical } from 'lucide-react'
+import { useChineseText } from '../hooks/useChineseText'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -9,6 +10,7 @@ interface Message {
 
 export default function ChatPage() {
   const { t } = useTranslation('chat')
+  const ct = useChineseText()
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: t('welcome') },
   ])
@@ -40,17 +42,17 @@ export default function ChatPage() {
     // Simulated AI response
     setTimeout(() => {
       const replies: Record<string, string> = {
-        [t('quickActions.watering')]: '目前已啟用自動澆水模式。所有感測器水位正常，A區水位 85%、B區水位 78%。下次排程澆水時間：今日 18:00。',
-        [t('quickActions.repot')]: '目前有 3 株植物建議換盆：\n• A區-03 羅勒（根系已滿）\n• C區-07 薄荷（介質老化）\n• D區-02 番茄（根系過密）\n是否需要建立換盆任務？',
-        [t('quickActions.health')]: '目前監測的 45 株植物健康狀態：\n• 健康：38 株 (84%)\n• 需關注：5 株 (11%)\n• 異常：2 株 (5%)\n異常植株位於 D區，建議檢查營養液 EC 值。',
-        [t('quickActions.disease')]: '目前偵測到 1 例可能的葉斑病，位於 E區-05 生菜。建議處理方式：\n1. 隔離受感染植株\n2. 調整環境濕度至 60% 以下\n3. 使用稀釋的 neem oil 噴灑',
-        [t('quickActions.pruning')]: '本週建議剪枝的植物：\n• B區-02 九層塔（頂芽過長）\n• C區-04 迷迭香（枝條過密）\n• E區-01 薄荷（控制擴張）\n剪枝有助於促進分枝生長。',
-        [t('quickActions.nutrition')]: '目前營養液狀態：\n• A區營養液：EC 1200 μS/cm，pH 6.2（正常）\n• B區營養液：EC 2100 μS/cm，pH 7.8（需調整！）\n• C區營養液：EC 1250 μS/cm，pH 6.1（正常）\nB區需要更換營養液。',
+        [t('quickActions.watering')]: ct('目前已啟用自動澆水模式。所有感測器水位正常，A區水位 85%、B區水位 78%。下次排程澆水時間：今日 18:00。'),
+        [t('quickActions.repot')]: ct('目前有 3 株植物建議換盆：\n• A區-03 羅勒（根系已滿）\n• C區-07 薄荷（介質老化）\n• D區-02 番茄（根系過密）\n是否需要建立換盆任務？'),
+        [t('quickActions.health')]: ct('目前監測的 45 株植物健康狀態：\n• 健康：38 株 (84%)\n• 需關注：5 株 (11%)\n• 異常：2 株 (5%)\n異常植株位於 D區，建議檢查營養液 EC 值。'),
+        [t('quickActions.disease')]: ct('目前偵測到 1 例可能的葉斑病，位於 E區-05 生菜。建議處理方式：\n1. 隔離受感染植株\n2. 調整環境濕度至 60% 以下\n3. 使用稀釋的 neem oil 噴灑'),
+        [t('quickActions.pruning')]: ct('本週建議剪枝的植物：\n• B區-02 九層塔（頂芽過長）\n• C區-04 迷迭香（枝條過密）\n• E區-01 薄荷（控制擴張）\n剪枝有助於促進分枝生長。'),
+        [t('quickActions.nutrition')]: ct('目前營養液狀態：\n• A區營養液：EC 1200 μS/cm，pH 6.2（正常）\n• B區營養液：EC 2100 μS/cm，pH 7.8（需調整！）\n• C區營養液：EC 1250 μS/cm，pH 6.1（正常）\nB區需要更換營養液。'),
       }
 
       const reply: Message = {
         role: 'assistant',
-        content: replies[text.trim()] || `[模擬回覆] 收到你的問題：「${text.trim()}」\n\n目前 AI 功能尚未連接後端 LLM，完成整合後將可查詢設備狀態並提供專業建議。`,
+        content: replies[text.trim()] || ct(`[模擬回覆] 收到你的問題：「${text.trim()}」\n\n目前 AI 功能尚未連接後端 LLM，完成整合後將可查詢設備狀態並提供專業建議。`),
       }
       setMessages((prev) => [...prev, reply])
       setSending(false)

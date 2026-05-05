@@ -4,12 +4,14 @@ import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { useOffice } from '../../context/OfficeContext'
 import { useOffices } from '../../hooks/useOffices'
+import { useChineseText } from '../../hooks/useChineseText'
 import { useSidebar } from './DashboardLayout'
 import { LanguageSwitcher } from './LanguageSwitcher'
 
 export function Header() {
   const { user, logout } = useAuth()
   const { t } = useTranslation()
+  const ct = useChineseText()
   const navigate = useNavigate()
   const { selectedOfficeId, setSelectedOfficeId, lockedOfficeId } = useOffice()
   const { offices } = useOffices()
@@ -54,7 +56,7 @@ export function Header() {
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e8f5e9] text-[#1B5E20] text-xs font-bold">
             {(user?.display_name || user?.username || 'A')[0]}
           </div>
-          <span className="text-gray-700 hidden sm:inline">{user?.display_name || user?.username}</span>
+          <span className="text-gray-700 hidden sm:inline">{ct(user?.display_name || user?.username || '')}</span>
           <span className="text-[10px] text-gray-400 hidden md:inline">{user?.role === 'superadmin' ? 'SA' : user?.role === 'office_admin' ? 'OA' : 'ST'}</span>
         </div>
         <button
@@ -62,7 +64,7 @@ export function Header() {
           className="rounded-lg px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
         >
           <span className="hidden sm:inline">{t('actions.logout')}</span>
-          <span className="sm:hidden text-xs">登出</span>
+          <span className="sm:hidden text-xs">{ct('登出')}</span>
         </button>
       </div>
     </header>

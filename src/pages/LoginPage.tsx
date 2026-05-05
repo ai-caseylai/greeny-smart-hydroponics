@@ -41,7 +41,7 @@ export default function LoginPage() {
             <div><div className="text-3xl font-bold">6</div><div className="text-green-200 text-sm">{t('statParams')}</div></div>
           </div>
         </div>
-        <div className="text-green-200 text-sm">greeny.techforliving.net</div>
+        <div className="text-green-200 text-sm">greenie.techforliving.net</div>
       </div>
 
       <div className="flex w-full lg:w-1/2 items-center justify-center p-8 bg-gray-50">

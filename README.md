@@ -16,7 +16,7 @@ React Frontend (Vite + TypeScript + Tailwind CSS)
   └── WebSocket        → greeny-ws Worker (real-time telemetry + relay control)
 
 Cloudflare Infrastructure:
-  ├── Pages (greeny.techforliving.net) — Frontend + REST API
+  ├── Pages (greenie.techforliving.net) — Frontend + REST API
   ├── Worker (greeny-ws) — WebSocket + Durable Objects
   └── D1 (greeny-db) — SQLite database
 ```
@@ -171,7 +171,7 @@ Cloudflare Infrastructure:
 ### HTTPS Mode (simple, unidirectional)
 ```cpp
 HTTPClient http;
-http.begin("https://greeny.techforliving.net/api/telemetry");
+http.begin("https://greenie.techforliving.net/api/telemetry");
 http.addHeader("Content-Type", "application/json");
 String json = "{\"device_id\":\"WSD-001\",\"ph\":6.5,\"ec\":1200,...}";
 http.POST(json);
@@ -189,7 +189,7 @@ See `ws-worker/ESP32_EXAMPLE.md` for full Arduino example using WebSocketsClient
 
 ### Cloudflare Resources
 - **D1 Database**: `greeny-db` (ID: `7191a23e-c43b-4962-b3fb-96818ac2d07c`)
-- **Pages Project**: `greeny` → `greeny.techforliving.net`
+- **Pages Project**: `greeny` → `greenie.techforliving.net`
 - **Worker**: `greeny-ws` → `greeny-ws.ai-caseylai.workers.dev`
 
 ### Deploy Steps

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Users, Plus, Trash2, Shield, Building2, Eye, Search, Pencil, Key, X } from 'lucide-react'
 import { useOffice } from '../context/OfficeContext'
 import { useOffices } from '../hooks/useOffices'
+import { useChineseText } from '../hooks/useChineseText'
 import { apiFetch } from '../lib/api'
 
 interface UserRow {
@@ -55,6 +56,7 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
   onClose: () => void
   onSaved: () => void
 }) {
+  const ct = useChineseText()
   const [form, setForm] = useState({
     display_name: user.display_name || '',
     role: user.role,
@@ -84,7 +86,7 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
       onSaved()
       onClose()
     } catch (err) {
-      alert('更新失敗')
+      alert(ct('更新失敗'))
     } finally {
       setSaving(false)
     }
@@ -94,38 +96,38 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold">編輯用戶 / Edit User</h3>
+          <h3 className="text-lg font-bold">{ct('編輯用戶 / Edit User')}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Username 帳號</label>
+            <label className="block text-xs text-gray-500 mb-1">{ct('Username 帳號')}</label>
             <input value={user.username} disabled className="w-full rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400" />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Display Name 顯示名稱</label>
+            <label className="block text-xs text-gray-500 mb-1">{ct('Display Name 顯示名稱')}</label>
             <input value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })}
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
           </div>
           {userRole === 'superadmin' && (
             <>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Role 角色</label>
+                <label className="block text-xs text-gray-500 mb-1">{ct('Role 角色')}</label>
                 <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
-                  <option value="staff">Staff / 一般員工</option>
-                  <option value="office_admin">Office Admin / 辦公室管理員</option>
-                  <option value="superadmin">Super Admin / 系統管理員</option>
+                  <option value="staff">{ct('Staff / 一般員工')}</option>
+                  <option value="office_admin">{ct('Office Admin / 辦公室管理員')}</option>
+                  <option value="superadmin">{ct('Super Admin / 系統管理員')}</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Office 辦公室</label>
+                <label className="block text-xs text-gray-500 mb-1">{ct('Office 辦公室')}</label>
                 <select value={form.office_id} onChange={e => setForm({ ...form, office_id: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
                   <option value="">-- None --</option>
                   {offices.map(o => (
-                    <option key={o.id} value={o.id}>{o.name}</option>
+                    <option key={o.id} value={o.id}>{ct(o.name)}</option>
                   ))}
                 </select>
               </div>
@@ -135,19 +137,19 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
           <div className="border-t border-gray-100 pt-3">
             <div className="flex items-center gap-2 mb-2">
               <Key className="h-4 w-4 text-amber-500" />
-              <span className="text-sm font-medium text-gray-700">重設密碼 / Reset Password</span>
+              <span className="text-sm font-medium text-gray-700">{ct('重設密碼 / Reset Password')}</span>
             </div>
             <div className="flex gap-2">
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="留空不更改 / Leave blank to keep"
+                placeholder={ct('留空不更改 / Leave blank to keep')}
                 className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
               />
               <button type="button" onClick={() => setShowPassword(!showPassword)}
                 className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50">
-                {showPassword ? '隱藏' : '顯示'}
+                {showPassword ? ct('隱藏') : ct('顯示')}
               </button>
             </div>
           </div>
@@ -156,11 +158,11 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
         <div className="flex gap-2 mt-5">
           <button onClick={handleSave} disabled={saving}
             className="rounded-lg bg-[#00a65a] px-4 py-2 text-sm text-white hover:bg-[#00954f] disabled:opacity-50">
-            {saving ? '儲存中...' : '儲存 / Save'}
+            {saving ? ct('儲存中...') : ct('儲存 / Save')}
           </button>
           <button onClick={onClose}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
-            取消 / Cancel
+            {ct('取消 / Cancel')}
           </button>
         </div>
       </div>
@@ -169,6 +171,7 @@ function EditUserModal({ user, offices, userRole, onClose, onSaved }: {
 }
 
 export default function UserManagementPage() {
+  const ct = useChineseText()
   const { t } = useTranslation('common')
   const { userRole, lockedOfficeId } = useOffice()
   const { offices } = useOffices()
@@ -204,17 +207,17 @@ export default function UserManagementPage() {
       setForm({ username: '', password: '', display_name: '', role: 'staff', office_id: '' })
       fetchUsers()
     } catch (err: any) {
-      alert('新增失敗：' + (err.message || '未知錯誤'))
+      alert(ct('新增失敗：') + (err.message || ct('未知錯誤')))
     }
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('確定要停用此用戶？ / Deactivate this user?')) return
+    if (!confirm(ct('確定要停用此用戶？ / Deactivate this user?'))) return
     try {
       await apiFetch(`/users/${id}`, { method: 'DELETE' })
       fetchUsers()
     } catch (err: any) {
-      alert('停用失敗：' + (err.message || '未知錯誤'))
+      alert(ct('停用失敗：') + (err.message || ct('未知錯誤')))
     }
   }
 
@@ -226,7 +229,7 @@ export default function UserManagementPage() {
       })
       fetchUsers()
     } catch (err: any) {
-      alert('重新啟用失敗：' + (err.message || '未知錯誤'))
+      alert(ct('重新啟用失敗：') + (err.message || ct('未知錯誤')))
     }
   }
 
@@ -250,7 +253,7 @@ export default function UserManagementPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg sm:text-xl font-bold">{t('userManagement', { defaultValue: 'Personnel Management / 人員管理' })}</h2>
+          <h2 className="text-lg sm:text-xl font-bold">{t('userManagement', { defaultValue: ct('Personnel Management / 人員管理') })}</h2>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">Role Hierarchy: Super Admin &gt; Office Admin &gt; Staff</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
@@ -263,7 +266,7 @@ export default function UserManagementPage() {
           {(
             <button onClick={() => setShowAdd(!showAdd)}
               className="flex items-center gap-1.5 rounded-lg bg-[#00a65a] px-3 py-1.5 text-sm text-white hover:bg-[#00954f]">
-              <Plus className="h-4 w-4" />Add User / 新增用戶
+              <Plus className="h-4 w-4" />{ct('Add User / 新增用戶')}
             </button>
           )}
         </div>
@@ -280,12 +283,12 @@ export default function UserManagementPage() {
                 <Icon className="h-6 w-6" />
                 <div>
                   <h3 className="font-bold">{cfg.label}</h3>
-                  <p className="text-xs opacity-80">{cfg.labelZh}</p>
+                  <p className="text-xs opacity-80">{ct(cfg.labelZh)}</p>
                 </div>
                 <span className="ml-auto text-2xl font-bold">{count}</span>
               </div>
               <p className="text-xs opacity-70">{cfg.desc}</p>
-              <p className="text-xs opacity-70 mt-1">{cfg.descZh}</p>
+              <p className="text-xs opacity-70 mt-1">{ct(cfg.descZh)}</p>
             </div>
           )
         })}
@@ -294,48 +297,48 @@ export default function UserManagementPage() {
       {/* Add user form */}
       {showAdd && (
         <form onSubmit={handleAdd} className="rounded-xl border border-[#00a65a]/30 bg-[#e8f5e9]/50 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">New User / 新增用戶</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">{ct('New User / 新增用戶')}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:grid-cols-5">
             <div>
-              <label className="block text-[10px] text-gray-500 mb-1">Username 帳號</label>
+              <label className="block text-[10px] text-gray-500 mb-1">{ct('Username 帳號')}</label>
               <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" required />
             </div>
             <div>
-              <label className="block text-[10px] text-gray-500 mb-1">Password 密碼</label>
+              <label className="block text-[10px] text-gray-500 mb-1">{ct('Password 密碼')}</label>
               <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" required />
             </div>
             <div>
-              <label className="block text-[10px] text-gray-500 mb-1">Display Name 顯示名稱</label>
+              <label className="block text-[10px] text-gray-500 mb-1">{ct('Display Name 顯示名稱')}</label>
               <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
             <div>
-              <label className="block text-[10px] text-gray-500 mb-1">Role 角色</label>
+              <label className="block text-[10px] text-gray-500 mb-1">{ct('Role 角色')}</label>
               <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
-                <option value="staff">Staff / 一般員工</option>
-                {userRole === 'superadmin' && <option value="office_admin">Office Admin / 辦公室管理員</option>}
-                {userRole === 'superadmin' && <option value="superadmin">Super Admin / 系統管理員</option>}
+                <option value="staff">{ct('Staff / 一般員工')}</option>
+                {userRole === 'superadmin' && <option value="office_admin">{ct('Office Admin / 辦公室管理員')}</option>}
+                {userRole === 'superadmin' && <option value="superadmin">{ct('Super Admin / 系統管理員')}</option>}
               </select>
             </div>
             {(userRole === 'superadmin' || form.role !== 'superadmin') && (
               <div>
-                <label className="block text-[10px] text-gray-500 mb-1">Office 辦公室</label>
+                <label className="block text-[10px] text-gray-500 mb-1">{ct('Office 辦公室')}</label>
                 <select value={form.office_id} onChange={(e) => setForm({ ...form, office_id: e.target.value })}
                   className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
                   <option value="">-- Select --</option>
                   {offices.filter(o => userRole === 'superadmin' || o.id === lockedOfficeId).map(o => (
-                    <option key={o.id} value={o.id}>{o.name}</option>
+                    <option key={o.id} value={o.id}>{ct(o.name)}</option>
                   ))}
                 </select>
               </div>
             )}
           </div>
           <div className="flex gap-2 mt-3">
-            <button type="submit" className="rounded bg-[#00a65a] px-4 py-1.5 text-sm text-white hover:bg-[#00954f]">Create / 建立</button>
-            <button type="button" onClick={() => setShowAdd(false)} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button type="submit" className="rounded bg-[#00a65a] px-4 py-1.5 text-sm text-white hover:bg-[#00954f]">{ct('Create / 建立')}</button>
+            <button type="button" onClick={() => setShowAdd(false)} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50">{ct('Cancel')}</button>
           </div>
         </form>
       )}
@@ -352,7 +355,7 @@ export default function UserManagementPage() {
             <div key={role} className="rounded-xl border border-border bg-white shadow-sm overflow-hidden">
               <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-gray-50">
                 <Icon className="h-4 w-4" style={{ color: cfg.dot.replace('bg-', '') }} />
-                <h3 className="text-sm font-semibold text-gray-700">{cfg.label} ({cfg.labelZh})</h3>
+                <h3 className="text-sm font-semibold text-gray-700">{cfg.label} ({ct(cfg.labelZh)})</h3>
                 <span className="ml-auto text-xs text-gray-400">{roleUsers.length} users</span>
               </div>
               <div className="divide-y divide-border">
@@ -364,34 +367,34 @@ export default function UserManagementPage() {
                       </div>
                       <div>
                         <p className={`text-sm font-medium ${!u.active ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-                          {u.display_name || u.username}
+                          {ct(u.display_name || u.username)}
                         </p>
                         <p className="text-[10px] text-gray-400">
                           @{u.username}
-                          {u.office_id && ` · ${officeMap.get(u.office_id) || `Office #${u.office_id}`}`}
+                          {u.office_id && ` · ${ct(officeMap.get(u.office_id) || `Office #${u.office_id}`)}`}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {!u.active && (
-                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] text-red-600">Inactive / 已停用</span>
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] text-red-600">{ct('Inactive / 已停用')}</span>
                       )}
                       {(
                         <button onClick={() => setEditingUser(u)}
-                          className="rounded p-1 text-gray-400 hover:text-blue-500" title="Edit / 編輯">
+                          className="rounded p-1 text-gray-400 hover:text-blue-500" title={ct('Edit / 編輯')}>
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                       )}
                       {!u.active && (userRole === 'superadmin' || userRole === 'office_admin') && (
                         <button onClick={() => handleReactivate(u.id)}
                           className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] text-green-600 hover:bg-green-100">
-                          Reactivate / 重新啟用
+                          {ct('Reactivate / 重新啟用')}
                         </button>
                       )}
                       {u.active && (userRole === 'superadmin' || (userRole === 'office_admin' && u.role === 'staff')) && (
                         <button onClick={() => handleDelete(u.id)}
                           className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-600 hover:bg-red-100">
-                          <Trash2 className="h-3 w-3" />停用
+                          <Trash2 className="h-3 w-3" />{ct('停用')}
                         </button>
                       )}
                     </div>

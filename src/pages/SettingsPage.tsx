@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Wifi, Bot, Radio, Bell, Wrench, Info, Zap, Users, Plus, Trash2 } from 'lucide-react'
 import { useAutomations } from '../hooks/useRacks'
 import { useOffice } from '../context/OfficeContext'
+import { useChineseText } from '../hooks/useChineseText'
 import { apiFetch } from '../lib/api'
 import { timeAgo } from '../lib/utils'
 import type { User } from '../types'
@@ -54,6 +55,7 @@ function SettingToggle({ defaultChecked }: { defaultChecked: boolean }) {
 
 export default function SettingsPage() {
   const { t } = useTranslation('settings')
+  const ct = useChineseText()
   const { automations, runAutomation, updateAutomation } = useAutomations()
   const { userRole } = useOffice()
 
@@ -113,9 +115,9 @@ export default function SettingsPage() {
           </SettingRow>
           <SettingRow label={t('mqtt.qos')}>
             <select defaultValue="1" className="w-full rounded-lg border border-border px-3 py-1.5 text-sm outline-none">
-              <option value="0">QoS 0 (最多一次)</option>
-              <option value="1">QoS 1 (至少一次)</option>
-              <option value="2">QoS 2 (剛好一次)</option>
+              <option value="0">QoS 0 ({ct('最多一次')})</option>
+              <option value="1">QoS 1 ({ct('至少一次')})</option>
+              <option value="2">QoS 2 ({ct('剛好一次')})</option>
             </select>
           </SettingRow>
         </SettingsSection>
@@ -191,7 +193,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-500">{t('system.uptime')}</span>
-              <span className="text-gray-700">15 天 8 小時</span>
+              <span className="text-gray-700">{ct('15 天 8 小時')}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-500">{t('system.dbSize')}</span>
@@ -203,7 +205,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-500">{t('system.lastSync')}</span>
-              <span className="text-gray-700">剛剛</span>
+              <span className="text-gray-700">{ct('剛剛')}</span>
             </div>
           </div>
           <div className="pt-3 border-t border-border">

@@ -370,7 +370,7 @@ static void send_telemetry_http(void)
     if (!json) return;
 
     esp_http_client_config_t config = {
-        .url = "https://greeny.techforliving.net/api/telemetry",
+        .url = "https://greenie.techforliving.net/api/telemetry",
         .method = HTTP_METHOD_POST,
         .event_handler = http_event_handler,
         .timeout_ms = 5000,
