@@ -37,9 +37,8 @@ static const char *TAG = "GREENY";
 #define PH_CHANNEL          ADC_CHANNEL_6   // GPIO34
 #define EC_CHANNEL          ADC_CHANNEL_7   // GPIO35
 #define TEMP_CHANNEL        ADC_CHANNEL_4   // GPIO32
-#define NDVI_CHANNEL        ADC_CHANNEL_5   // GPIO33
-#define RELAY1_PIN          GPIO_NUM_26
-#define RELAY2_PIN          GPIO_NUM_27
+#define RELAY_PINS          { GPIO_NUM_26, GPIO_NUM_27, GPIO_NUM_25, GPIO_NUM_33 }
+#define RELAY_COUNT         4
 
 // ===== WiFi =====
 #define WIFI_CONNECTED_BIT  BIT0
@@ -52,9 +51,8 @@ static adc_oneshot_unit_handle_t s_adc1_handle = NULL;
 static adc_cali_handle_t s_adc_cali = NULL;
 
 // ===== 感測器讀數 =====
-static float s_ph = 0, s_ec = 0, s_water_temp = 0;
-static float s_ndvi = 0, s_water_level = 0;
-static int s_relay1 = 0, s_relay2 = 0;
+static float s_ph = 0, s_ec = 0, s_water_temp = 0, s_water_level = 0;
+static int s_relay[RELAY_COUNT] = {0};
 #ifndef CONFIG_USE_WEBSOCKET
 static bool s_http_ok = false;
 #endif
@@ -231,10 +229,11 @@ static void oled_update_display(void)
     oled_write_line(1, line);
     snprintf(line, sizeof(line), "WT:%05.1f C WL:%02.0f%%", s_water_temp, s_water_level);
     oled_write_line(2, line);
-    snprintf(line, sizeof(line), "NDVI:%.2f", s_ndvi);
+    snprintf(line, sizeof(line), "R:%d%d%d%d",
+             s_relay[0] ? 1 : 0, s_relay[1] ? 1 : 0,
+             s_relay[2] ? 1 : 0, s_relay[3] ? 1 : 0);
     oled_write_line(3, line);
-    snprintf(line, sizeof(line), "R1:%s R2:%s", s_relay1 ? "ON " : "OFF", s_relay2 ? "ON " : "OFF");
-    oled_write_line(4, line);
+    oled_write_line(4, "");
 #ifdef CONFIG_USE_WEBSOCKET
     snprintf(line, sizeof(line), "WiFi:%s WSS:%s",
              s_wifi_connected ? "OK" : "--", s_ws_connected ? "OK" : "--");
@@ -261,7 +260,6 @@ static void adc_init_all(void)
     ESP_ERROR_CHECK(adc_oneshot_config_channel(s_adc1_handle, PH_CHANNEL, &cc));
     ESP_ERROR_CHECK(adc_oneshot_config_channel(s_adc1_handle, EC_CHANNEL, &cc));
     ESP_ERROR_CHECK(adc_oneshot_config_channel(s_adc1_handle, TEMP_CHANNEL, &cc));
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(s_adc1_handle, NDVI_CHANNEL, &cc));
     adc_cali_line_fitting_config_t lc = { .unit_id = ADC_UNIT_1, .atten = ADC_ATTEN_DB_11, .bitwidth = ADC_BITWIDTH_12, .default_vref = 1100 };
     ESP_ERROR_CHECK(adc_cali_create_scheme_line_fitting(&lc, &s_adc_cali));
 }
@@ -278,33 +276,37 @@ static uint32_t adc_read_mv(adc_channel_t ch)
 
 static float read_ph(void) { return (float)adc_read_mv(PH_CHANNEL) / 330.0f * 14.0f; }
 static float read_ec(void) { return (float)adc_read_mv(EC_CHANNEL); }
-static float read_ndvi(void) { return (float)adc_read_raw(NDVI_CHANNEL) / 4095.0f; }
 static float read_water_temp(void) { return 25.0f; }
 static float read_water_level(void) { return 85.0f; }
 
 static void read_all_sensors(void)
 {
     s_ph = read_ph(); s_ec = read_ec();
-    s_water_temp = read_water_temp(); s_ndvi = read_ndvi();
-    s_water_level = read_water_level();
+    s_water_temp = read_water_temp(); s_water_level = read_water_level();
 }
 
 // ============================================================
 // Relay
 // ============================================================
+static const int RELAY_GPIOS[RELAY_COUNT] = RELAY_PINS;
+
 static void relay_init_all(void)
 {
-    gpio_config_t c = { .pin_bit_mask = (1ULL << RELAY1_PIN) | (1ULL << RELAY2_PIN),
-                        .mode = GPIO_MODE_OUTPUT, .pull_up_en = GPIO_PULLUP_DISABLE,
-                        .pull_down_en = GPIO_PULLDOWN_DISABLE, .intr_type = GPIO_INTR_DISABLE };
+    uint64_t mask = 0;
+    for (int i = 0; i < RELAY_COUNT; i++) mask |= (1ULL << RELAY_GPIOS[i]);
+    gpio_config_t c = { .pin_bit_mask = mask, .mode = GPIO_MODE_OUTPUT,
+                        .pull_up_en = GPIO_PULLUP_DISABLE, .pull_down_en = GPIO_PULLDOWN_DISABLE,
+                        .intr_type = GPIO_INTR_DISABLE };
     gpio_config(&c);
-    gpio_set_level(RELAY1_PIN, 0); gpio_set_level(RELAY2_PIN, 0);
+    for (int i = 0; i < RELAY_COUNT; i++) { s_relay[i] = 0; gpio_set_level(RELAY_GPIOS[i], 0); }
 }
 
-static void set_relay(int r1, int r2)
+static void set_relay(int idx, int val)
 {
-    if (r1 >= 0) { s_relay1 = r1; gpio_set_level(RELAY1_PIN, r1); }
-    if (r2 >= 0) { s_relay2 = r2; gpio_set_level(RELAY2_PIN, r2); }
+    if (idx >= 0 && idx < RELAY_COUNT && val >= 0) {
+        s_relay[idx] = val;
+        gpio_set_level(RELAY_GPIOS[idx], val);
+    }
 }
 
 // ============================================================
@@ -318,8 +320,10 @@ static char *build_telemetry_ws_json(void)
     cJSON_AddStringToObject(r, "device_id", CONFIG_DEVICE_ID);
     cJSON_AddNumberToObject(r, "ph", s_ph); cJSON_AddNumberToObject(r, "ec", s_ec);
     cJSON_AddNumberToObject(r, "water_temp", s_water_temp); cJSON_AddNumberToObject(r, "water_level", s_water_level);
-    cJSON_AddNumberToObject(r, "ndvi", s_ndvi);
-    cJSON_AddNumberToObject(r, "relay1", s_relay1); cJSON_AddNumberToObject(r, "relay2", s_relay2);
+    for (int i = 0; i < RELAY_COUNT; i++) {
+        char key[8]; snprintf(key, sizeof(key), "relay%d", i + 1);
+        cJSON_AddNumberToObject(r, key, s_relay[i]);
+    }
     cJSON_AddNumberToObject(r, "ts_ms", (double)(xTaskGetTickCount() * portTICK_PERIOD_MS));
     char *j = cJSON_PrintUnformatted(r); cJSON_Delete(r); return j;
 }
@@ -330,8 +334,10 @@ static char *build_telemetry_http_json(void)
     cJSON_AddStringToObject(r, "device_id", CONFIG_DEVICE_ID);
     cJSON_AddNumberToObject(r, "ph", s_ph); cJSON_AddNumberToObject(r, "ec", s_ec);
     cJSON_AddNumberToObject(r, "water_temp", s_water_temp); cJSON_AddNumberToObject(r, "water_level", s_water_level);
-    cJSON_AddNumberToObject(r, "ndvi", s_ndvi);
-    cJSON_AddNumberToObject(r, "relay1", s_relay1); cJSON_AddNumberToObject(r, "relay2", s_relay2);
+    for (int i = 0; i < RELAY_COUNT; i++) {
+        char key[8]; snprintf(key, sizeof(key), "relay%d", i + 1);
+        cJSON_AddNumberToObject(r, key, s_relay[i]);
+    }
     char *j = cJSON_PrintUnformatted(r); cJSON_Delete(r); return j;
 }
 #endif
@@ -347,9 +353,11 @@ static void handle_incoming_message(const char *data, int len)
     if (!r) return;
     cJSON *t = cJSON_GetObjectItem(r, "type");
     if (t && cJSON_IsString(t) && strcmp(t->valuestring, "relay_cmd") == 0) {
-        cJSON *a = cJSON_GetObjectItem(r, "relay1"), *b = cJSON_GetObjectItem(r, "relay2");
-        set_relay((a && cJSON_IsNumber(a)) ? a->valueint : -1,
-                  (b && cJSON_IsNumber(b)) ? b->valueint : -1);
+        for (int i = 0; i < RELAY_COUNT; i++) {
+            char key[8]; snprintf(key, sizeof(key), "relay%d", i + 1);
+            cJSON *v = cJSON_GetObjectItem(r, key);
+            if (v && cJSON_IsNumber(v)) set_relay(i, v->valueint);
+        }
     } else if (t && cJSON_IsString(t) && strcmp(t->valuestring, "ping") == 0) {
         if (s_ws_connected) ws_send_frame("{\"type\":\"pong\"}");
     }
