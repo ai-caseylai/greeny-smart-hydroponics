@@ -330,6 +330,90 @@ static uint8_t skin_temp(void) {
 }
 
 // ============================================================
+// NT3H2111 Active NFC (I2C 0x55)
+//   Phone tap → reads NDEF URI with live stats
+//   URL: https://greeny/kid/001?s=5230&h=85&t=36.5&b=80
+//   Also stores static emergency info in EEPROM
+// ============================================================
+#define NFC_ADDR  0x55
+#define NFC_SRAM  0x00   // SRAM start for NDEF
+#define NFC_SESSION 0xFE // Session register
+
+static void nfc_write(uint8_t reg, uint8_t *buf, uint8_t len) {
+    I2C_WriteReg(NFC_ADDR, reg, buf, len);
+}
+
+static void nfc_open_session(void) {
+    uint8_t cmd = 0x00; nfc_write(NFC_SESSION, &cmd, 1);  // Open session
+}
+
+static void nfc_close_session(void) {
+    uint8_t cmd = 0x01; nfc_write(NFC_SESSION, &cmd, 1);  // Close + commit
+}
+
+// Build NDEF URI record and write to NFC SRAM
+static void nfc_update(uint16_t steps, uint8_t hr, uint8_t spo2,
+                       uint8_t temp, uint8_t bat) {
+    if (!nfc_present) return;
+
+    // URI: "https://greeny/kid/001?s=5230&h=85&o=98&t=36.5&b=80"
+    char uri[52];
+    uint8_t ul = 0;
+    // URL encode manually (digits only, simple)
+    uri[ul++]='0';uri[ul++]='0';uri[ul++]='1';uri[ul++]='?';uri[ul++]='s';uri[ul++]='=';
+    {uint16_t n=steps;char t[6];uint8_t l=0;if(!n)t[l++]='0';else while(n){t[l++]='0'+n%10;n/=10;}
+     for(int8_t i=l-1;i>=0;i--)uri[ul++]=t[i];}
+    uri[ul++]='&';uri[ul++]='h';uri[ul++]='=';
+    {uint8_t n=hr;char t[4];uint8_t l=0;if(!n)t[l++]='0';else while(n){t[l++]='0'+n%10;n/=10;}
+     for(int8_t i=l-1;i>=0;i--)uri[ul++]=t[i];}
+    uri[ul++]='&';uri[ul++]='o';uri[ul++]='=';
+    {uint8_t n=spo2;char t[4];uint8_t l=0;if(!n)t[l++]='0';else while(n){t[l++]='0'+n%10;n/=10;}
+     for(int8_t i=l-1;i>=0;i--)uri[ul++]=t[i];}
+    uri[ul++]='&';uri[ul++]='t';uri[ul++]='=';
+    {uint8_t n=30+(temp/10); uri[ul++]='0'+n/10; uri[ul++]='0'+n%10; uri[ul++]='.'; uri[ul++]='0'+temp%10;}
+    uri[ul++]='&';uri[ul++]='b';uri[ul++]='=';
+    {uint8_t n=bat;char t[4];uint8_t l=0;if(!n)t[l++]='0';else while(n){t[l++]='0'+n%10;n/=10;}
+     for(int8_t i=l-1;i>=0;i--)uri[ul++]=t[i];}
+
+    // Build NDEF message
+    uint8_t ndef[80]; uint8_t ni = 0;
+    ndef[ni++] = 0xD1;        // NDEF: MB ME SR=1 TNF=URI(2)
+    ndef[ni++] = 0x01;        // Type length = 1
+    ndef[ni++] = ul + 1;      // Payload length (URI prefix + rest)
+    ndef[ni++] = 'U';         // Type = URI
+    ndef[ni++] = 0x03;        // URI prefix = "https://"
+    for (uint8_t i = 0; i < ul; i++) ndef[ni++] = uri[i];
+
+    nfc_open_session();
+    nfc_write(NFC_SRAM, ndef, ni);  // Write NDEF to SRAM
+    nfc_close_session();
+}
+
+// Check if NT3H2111 present
+static bool nfc_present;
+static void nfc_init(void) {
+    // Read capability container to verify chip
+    uint8_t cc[4];
+    I2C_ReadReg(NFC_ADDR, 0xE0, cc, 4);  // Capability Container
+    // NT3H2111 CC: {0xE1, 0x10, 0x6D, 0x00}
+    nfc_present = (cc[0] == 0xE1);
+}
+
+// Store emergency contact in NFC EEPROM (done once)
+static void nfc_setup_emergency(void) {
+    // NDEF Text record: "Emergency: call 0912-345-678"
+    // Stored in EEPROM at offset for static NDEF
+    uint8_t txt[] = {
+        0x91, 0x01, 0x15, 'T',
+        0x02, 'z','h',  // Language: zh
+        'E','m','e','r','g',':',' ','0','9','1','2','-','3','4','5','-','6','7','8'
+    };
+    nfc_open_session();
+    nfc_write(0x06, txt, sizeof(txt));  // Static NDEF in EEPROM area
+    nfc_close_session();
+}
+
+// ============================================================
 // Activity record (12 bytes)
 // ============================================================
 typedef struct __attribute__((packed)) {
@@ -539,6 +623,8 @@ static void system_init(void) {
     // MAX30102
     max30102_present = max30102_init();
     if(max30102_present) max30102_shutdown();
+    nfc_init();
+    if(nfc_present) nfc_setup_emergency();
     // RTC + WDT + BLE
     RTC_Init(RTC_CLK_SRC_XTAL); WDOG_Init(WDOG_CLK_SRC_LSI, WDOG_TIMEOUT_16S);
     CH58x_ble_init(); GAPRole_PeripheralInit(); GAPBondMgr_Init();
@@ -605,6 +691,7 @@ int main(void) {
             record_t rec; rec.ts=now/60; rec.steps=minute_s; rec.hr=hr; rec.spo2=spo2;
             rec.temp=temp; rec.intensity=minute_i; rec.act_type=classify_activity(acc,gyr);
             flash_write(&rec);
+            nfc_update(minute_s, hr, spo2, temp, battery_pct());
             step_count-=minute_s; act_seconds=0; minute_s=0;
             ws2812_rgb(0,4,0); for(volatile uint32_t i=0;i<20000;i++); ws2812_rgb(0,0,0);
         }

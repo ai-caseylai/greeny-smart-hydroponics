@@ -134,17 +134,19 @@
   <line x1="175" y1="300" x2="230" y2="310" class="wr"/>
 
   <!-- ============================================================ -->
-  <!-- NFC Sticker (passive, no wiring) -->
+  <!-- NT3H2111 Active NFC (I2C 0x55) -->
   <!-- ============================================================ -->
-  <rect x="580" y="510" width="70" height="30" rx="15" fill="#e8f5e9" stroke="#4caf50" stroke-width="1.5" stroke-dasharray="4,2"/>
-  <text x="615" y="525" font-size="7" fill="#4caf50">NTAG 貼片</text>
-  <text x="615" y="537" font-size="6" fill="#4caf50">(被動·免接線)</text>
+  <rect x="550" y="510" width="110" height="45" rx="5" class="chip"/>
+  <text x="605" y="528" class="ct" font-size="8" font-weight="bold">NT3H2111</text>
+  <text x="605" y="542" class="ct" font-size="7">Active NFC 0x55</text>
+  <line x1="550" y1="520" x2="460" y2="175" class="ws"/> <!-- SDA -->
+  <line x1="550" y1="545" x2="460" y2="175" class="ws"/> <!-- SCL -->
 
   <!-- ============================================================ -->
   <!-- Legend -->
   <!-- ============================================================ -->
   <rect x="30" y="555" width="690" height="60" rx="5" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
   <text x="45" y="572" font-size="10" font-weight="bold" fill="#333" text-anchor="start">全配版 BOM: CH582(¥3)+IMU(¥8)+MAX30102(¥15)+OLED(¥8)+WS2812(¥0.5)+震動(¥2)+NTC(¥1)+NTAG(¥1)+電池(¥10)+充電(¥2)+PCB外殼(¥5)+被動(¥3)=¥60</text>
-  <text x="45" y="590" font-size="9" fill="#555" text-anchor="start">I²C 匯流排共享: IMU(0x68)+OLED(0x3C)+MAX30102(0x57)。PA1=IMU INT1(震動喚醒)。PA6=震動馬達(NPN驅動)。PA7=貼膚NTC。NTAG=被動貼片免接線。</text>
+  <text x="45" y="590" font-size="9" fill="#555" text-anchor="start">I²C 匯流排共享: IMU(0x68)+OLED(0x3C)+MAX30102(0x57)+NT3H2111(0x55)。PA1=IMU INT1。PA6=震動馬達。PA7=貼膚NTC。</text>
   <text x="45" y="606" font-size="9" fill="#555" text-anchor="start">續航: 白天計步+心率10分測一次+夜間睡眠連續心率≈5-7天(150mAh)。OLED按鈕才亮(5秒自動熄滅)。</text>
 </svg>
