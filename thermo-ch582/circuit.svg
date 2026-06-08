@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 580" font-family="monospace" font-size="11">
+  <defs>
+    <style>
+      text { dominant-baseline: middle; text-anchor: middle; }
+      .t { font-size: 14; font-weight: bold; }
+      .pn { font-size: 7; fill: #888; }
+      .pn2 { font-size: 8; }
+      .w { stroke: #333; stroke-width: 1.5; fill: none; }
+      .wv { stroke: #c00; stroke-width: 1.8; fill: none; }
+      .wg { stroke: #888; stroke-width: 1.2; fill: none; stroke-dasharray: 5,3; }
+      .ws { stroke: #25c; stroke-width: 1.5; fill: none; }
+      .wr { stroke: #0a8; stroke-width: 1.5; fill: none; }
+      .wi { stroke: #a3c; stroke-width: 1.5; fill: none; }
+      .comp { fill: #f8f8f8; stroke: #333; stroke-width: 1.5; }
+      .chip { fill: #1a1a2e; stroke: #555; stroke-width: 1.5; }
+      .ct { fill: #ddd; }
+      .ann { font-size: 7; fill: #666; }
+    </style>
+  </defs>
+
+  <text x="325" y="22" class="t">CH582M 溫度控制器 — RISC-V BLE 單晶片 · NT$35</text>
+
+  <!-- ============================================================ -->
+  <!-- CH582M QFN28 (center) -->
+  <!-- ============================================================ -->
+  <rect x="200" y="45" width="250" height="300" rx="6" class="chip"/>
+  <text x="325" y="67" class="ct" font-weight="bold" font-size="13">CH582M</text>
+  <text x="325" y="83" class="ct" font-size="9">RISC-V + BLE 5.0 · QFN28</text>
+
+  <!-- Left pins -->
+  <text x="208" y="110" class="pn" text-anchor="end">1-6</text>  <text x="205" y="122" class="pn2" fill="#ddd">PB0-PB5</text>
+  <text x="208" y="140" class="pn" text-anchor="end">7,22</text> <text x="205" y="152" class="pn2" fill="#f66">VCC 3.3V</text>
+  <text x="208" y="170" class="pn" text-anchor="end">9,21,28</text><text x="205" y="182" class="pn2" fill="#999">GND</text>
+  <text x="208" y="200" class="pn" text-anchor="end">14</text> <text x="205" y="212" class="pn2" fill="#ff0">PA0 (ADC)</text>
+  <text x="208" y="230" class="pn" text-anchor="end">15</text> <text x="205" y="242" class="pn2" fill="#5f5">PA1 (OUT)</text>
+  <text x="208" y="260" class="pn" text-anchor="end">24</text> <text x="205" y="272" class="pn2" fill="#0f0">PA8/X32KI</text>
+  <text x="208" y="290" class="pn" text-anchor="end">25</text> <text x="205" y="302" class="pn2" fill="#0f0">PA9/X32KO</text>
+
+  <!-- Right pins -->
+  <text x="442" y="110" class="pn" text-anchor="start">11</text> <text x="445" y="122" class="pn2" fill="#f88">PB10 USB_D+</text>
+  <text x="442" y="140" class="pn" text-anchor="start">12</text> <text x="445" y="152" class="pn2" fill="#f88">PB11 USB_D-</text>
+  <text x="442" y="170" class="pn" text-anchor="start">23</text> <text x="445" y="182" class="pn2" fill="#ddd">PA7</text>
+  <text x="442" y="200" class="pn" text-anchor="start">16-20</text><text x="445" y="212" class="pn2" fill="#ddd">PA2-PA6</text>
+
+  <text x="270" y="330" class="ann">QFN28 4x4mm · 可手焊</text>
+
+  <!-- ============================================================ -->
+  <!-- USB Connector -->
+  <!-- ============================================================ -->
+  <rect x="30" y="120" width="55" height="35" rx="5" class="comp"/>
+  <text x="57" y="142" class="pn2" font-weight="bold">USB</text>
+  <line x1="85" y1="128" x2="200" y2="115" class="ws"/>
+  <text x="140" y="115" font-size="8" fill="#25c">D+ → PB10</text>
+  <line x1="85" y1="140" x2="200" y2="145" class="ws"/>
+  <text x="140" y="138" font-size="8" fill="#25c">D- → PB11</text>
+  <line x1="85" y1="155" x2="110" y2="155" class="wv"/>
+  <text x="98" y="148" font-size="7" fill="#c00">5V</text>
+  <line x1="110" y1="155" x2="110" y2="100" class="wv"/>
+  <line x1="110" y1="100" x2="380" y2="100" class="wv"/>
+  <text x="245" y="93" font-size="8" fill="#c00">VCC_BUS (3.3V via internal LDO)</text>
+
+  <!-- ============================================================ -->
+  <!-- CR2032 Battery -->
+  <!-- ============================================================ -->
+  <rect x="320" y="360" width="45" height="20" rx="6" fill="#eee" stroke="#333" stroke-width="1.5"/>
+  <text x="342" y="374" font-size="8">CR2032</text>
+  <text x="342" y="390" font-size="6" fill="#666">3V 225mAh</text>
+  <line x1="342" y1="360" x2="342" y2="350" class="wv"/>
+  <line x1="342" y1="350" x2="380" y2="350" class="wv"/>
+  <line x1="380" y1="350" x2="380" y2="100" class="wv"/>
+  <text x="360" y="345" font-size="7" fill="#c00">D</text>
+  <text x="360" y="230" font-size="7" fill="#c00">Schottky OR</text>
+
+  <!-- ============================================================ -->
+  <!-- 32.768KHz RTC Crystal -->
+  <!-- ============================================================ -->
+  <rect x="120" y="240" width="35" height="45" rx="8" class="comp"/>
+  <text x="137" y="258" font-size="6">32.768</text>
+  <text x="137" y="268" font-size="6">KHz</text>
+  <line x1="155" y1="250" x2="200" y2="265" class="wr"/>
+  <line x1="155" y1="275" x2="200" y2="295" class="wr"/>
+  <line x1="125" y1="262" x2="125" y2="285" class="wg"/>
+  <text x="118" y="274" font-size="5" fill="#0a8">12p</text>
+  <text x="105" y="235" font-size="8" fill="#0a8" font-weight="bold">RTC晶振</text>
+
+  <!-- ============================================================ -->
+  <!-- NTC Temperature Sensor -->
+  <!-- ============================================================ -->
+  <line x1="380" y1="100" x2="380" y2="410" class="wv"/>
+  <rect x="377" y="410" width="6" height="25" fill="#fff" stroke="#c00" stroke-width="1"/>
+  <text x="390" y="425" font-size="7" fill="#c00">100K</text>
+  <line x1="380" y1="435" x2="380" y2="450" class="ws"/>
+  <line x1="380" y1="450" x2="200" y2="450" class="ws"/>
+  <line x1="200" y1="450" x2="200" y2="205" class="ws"/>
+
+  <path d="M185,460 L195,448 L200,468 L205,448 L210,468 L215,448 L225,458" fill="none" stroke="#25c" stroke-width="1.5"/>
+  <line x1="225" y1="460" x2="240" y2="460" class="ws"/>
+  <line x1="240" y1="460" x2="240" y2="480" class="wg"/>
+  <text x="300" y="455" font-size="8" fill="#25c" text-anchor="start">NTC 100K B=3950</text>
+
+  <!-- ============================================================ -->
+  <!-- MOSFET Output (PA1 → AO3400) -->
+  <!-- ============================================================ -->
+  <line x1="200" y1="235" x2="170" y2="235" class="ws"/>
+  <rect x="160" y="230" width="6" height="20" fill="#fff" stroke="#25c" stroke-width="1"/>
+  <text x="145" y="243" font-size="7" fill="#25c">1K</text>
+  <rect x="135" y="220" width="25" height="35" rx="3" class="comp"/>
+  <text x="147" y="235" font-size="6">N-MOS</text>
+  <text x="147" y="247" font-size="6">AO3400</text>
+  <line x1="135" y1="240" x2="125" y2="240" class="ws"/>
+  <line x1="147" y1="255" x2="147" y2="275" class="wg"/>
+  <line x1="147" y1="220" x2="147" y2="200" class="ws"/>
+  <rect x="130" y="175" width="35" height="22" rx="4" fill="#fff" stroke="#25c" stroke-width="1"/>
+  <text x="147" y="186" font-size="7">風扇</text>
+  <text x="147" y="196" font-size="6">/加熱</text>
+
+  <!-- ============================================================ -->
+  <!-- Legend -->
+  <!-- ============================================================ -->
+  <rect x="30" y="490" width="590" height="80" rx="6" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
+
+  <text x="45" y="506" font-size="11" font-weight="bold" fill="#333" text-anchor="start">CH582M — RISC-V BLE 5.0 單晶片方案</text>
+  <text x="45" y="524" font-size="9" fill="#555" text-anchor="start">燒錄: 首次按住BOOT鍵→插USB→./flash.sh。之後 wchisp 全自動。</text>
+  <text x="45" y="540" font-size="9" fill="#555" text-anchor="start">功耗: 休眠1μA(RTC+32K晶振)+廣告3ms/60s≈3μA平均→CR2032 8.5年</text>
+  <text x="45" y="556" font-size="9" fill="#555" text-anchor="start">BOM: CH582M(NT$15)+NTC+100K+AO3400+1K+32K晶振+12pFx2+CR2032+USB座≈NT$35</text>
+</svg>
