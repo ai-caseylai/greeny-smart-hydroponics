@@ -438,41 +438,257 @@ static void ble_handler(uint32_t event, uint8_t *data, uint16_t len) {
 }
 
 // ============================================================
-// LED control (WS2812 / simple GPIO)
+// WS2812 RGB LED (PA4, 1-wire bit-bang)
 // ============================================================
-#define LED_PIN  GPIO_Pin_4
-#define LED_PORT GPIOA
+#define WS2812_PIN  GPIO_Pin_4
+#define WS2812_PORT GPIOA
 
-static void led_init(void) {
-    GPIOA_ModeCfg(LED_PIN, GPIO_ModeOut_PP_5mA);
-    GPIOA_ResetBits(LED_PIN);
-}
-
-static void led_set(uint8_t on) {
-    if (on) GPIOA_SetBits(LED_PORT, LED_PIN);
-    else    GPIOA_ResetBits(LED_PORT, LED_PIN);
-}
-
-// Blink pattern: count × 100ms on, 200ms off
-static void led_blink(uint8_t count) {
-    for (uint8_t i = 0; i < count; i++) {
-        led_set(1); for (volatile uint32_t j = 0; j < 600000; j++);
-        led_set(0); for (volatile uint32_t j = 0; j < 1200000; j++);
+// WS2812 timing @ 60MHz: 0=400nsH+850nsL, 1=800nsH+450nsL
+// 1 cycle = 16.7ns. Use ~12 NOP cycles per bit decision.
+static void ws2812_send_byte(uint8_t byte) {
+    for (int8_t bit = 7; bit >= 0; bit--) {
+        if (byte & (1 << bit)) {
+            // 1-bit: ~800ns high, 450ns low
+            GPIOA_SetBits(WS2812_PIN);
+            for (volatile uint8_t n = 0; n < 20; n++);  // ~800ns
+            GPIOA_ResetBits(WS2812_PIN);
+            for (volatile uint8_t n = 0; n < 10; n++);  // ~450ns
+        } else {
+            // 0-bit: ~400ns high, 850ns low
+            GPIOA_SetBits(WS2812_PIN);
+            for (volatile uint8_t n = 0; n < 8; n++);   // ~400ns
+            GPIOA_ResetBits(WS2812_PIN);
+            for (volatile uint8_t n = 0; n < 22; n++);  // ~850ns
+        }
     }
 }
 
+static void ws2812_set(uint8_t r, uint8_t g, uint8_t b) {
+    ws2812_send_byte(g);  // GRB order
+    ws2812_send_byte(r);
+    ws2812_send_byte(b);
+    // Reset: >50μs low
+    GPIOA_ResetBits(WS2812_PIN);
+    for (volatile uint16_t n = 0; n < 3000; n++);
+}
+
+static void ws2812_init(void) {
+    GPIOA_ModeCfg(WS2812_PIN, GPIO_ModeOut_PP_5mA);
+    ws2812_set(0, 0, 0);
+}
+
 // ============================================================
-// Button
+// SSD1306 OLED 0.49" 64x32 (I²C 0x3C, shared bus with IMU)
 // ============================================================
-#define BTN_PIN  GPIO_Pin_5
-#define BTN_PORT GPIOA
+#define OLED_ADDR  0x3C
+#define OLED_WIDTH 64
+#define OLED_HEIGHT 32
+#define OLED_PAGES (OLED_HEIGHT / 8)  // 4 pages
+
+static bool oled_on;
+
+static void oled_write_cmd(uint8_t cmd) {
+    I2C_WriteReg(OLED_ADDR, 0x00, &cmd, 1);  // 0x00 = command mode
+}
+
+static void oled_write_data(uint8_t *buf, uint8_t len) {
+    I2C_WriteReg(OLED_ADDR, 0x40, buf, len);  // 0x40 = data mode
+}
+
+static void oled_init(void) {
+    // SSD1306 init sequence for 64x32
+    uint8_t init[] = {
+        0xAE,       // Display OFF
+        0xD5, 0x80, // Clock div
+        0xA8, 0x1F, // Mux ratio = 31 (32 rows)
+        0xD3, 0x00, // Display offset = 0
+        0x40,       // Start line = 0
+        0x8D, 0x14, // Charge pump ON
+        0x20, 0x00, // Horizontal addressing
+        0xA1,       // Segment remap
+        0xC8,       // COM scan direction
+        0xDA, 0x02, // COM pins
+        0x81, 0x7F, // Contrast
+        0xD9, 0xF1, // Pre-charge
+        0xDB, 0x40, // VCOM detect
+        0xA4,       // Display from RAM
+        0xA6,       // Normal (non-inverted)
+        0xAF,       // Display ON
+    };
+    for (uint8_t i = 0; i < sizeof(init); i++)
+        oled_write_cmd(init[i]);
+    oled_on = true;
+}
+
+static void oled_clear(void) {
+    uint8_t zero[64] = {0};
+    for (uint8_t page = 0; page < OLED_PAGES; page++) {
+        oled_write_cmd(0xB0 + page);  // Set page
+        oled_write_cmd(0x00);         // Column low
+        oled_write_cmd(0x10);         // Column high
+        oled_write_data(zero, OLED_WIDTH);
+    }
+}
+
+// 8x16 digit font (numbers 0-9, :, space) — packed as 16 bytes each
+static const uint8_t font_8x16[][16] = {
+    // 0
+    {0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C},
+    // 1
+    {0x18,0x38,0x78,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x7E,0x7E},
+    // 2
+    {0x3C,0x7E,0x66,0x60,0x60,0x60,0x30,0x18,0x0C,0x06,0x06,0x06,0x66,0x66,0x7E,0x3C},
+    // 3
+    {0x3C,0x7E,0x66,0x60,0x60,0x38,0x38,0x60,0x60,0x60,0x60,0x60,0x66,0x66,0x7E,0x3C},
+    // 4
+    {0x30,0x38,0x3C,0x36,0x33,0x33,0x7F,0x7F,0x30,0x30,0x30,0x30,0x30,0x30,0x78,0x78},
+    // 5
+    {0x7E,0x7E,0x06,0x06,0x3E,0x7E,0x66,0x60,0x60,0x60,0x60,0x60,0x66,0x66,0x7E,0x3C},
+    // 6
+    {0x3C,0x7E,0x66,0x06,0x06,0x3E,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C},
+    // 7
+    {0x7E,0x7E,0x66,0x60,0x60,0x30,0x30,0x18,0x18,0x18,0x0C,0x0C,0x0C,0x0C,0x0C,0x0C},
+    // 8
+    {0x3C,0x7E,0x66,0x66,0x66,0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C},
+    // 9
+    {0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x7E,0x3E,0x60,0x60,0x60,0x66,0x66,0x7E,0x3C},
+    // : colon
+    {0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00},
+    // % percent
+    {0x06,0x0F,0x09,0x06,0x60,0x30,0x18,0x0C,0x06,0x03,0x01,0x33,0x61,0x71,0x3B,0x1E},
+    // . dot
+    {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00},
+    // space
+    {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
+};
+
+static void oled_draw_char(uint8_t x, uint8_t page, uint8_t ch) {
+    uint8_t idx;
+    if (ch >= '0' && ch <= '9') idx = ch - '0';
+    else if (ch == ':') idx = 10;
+    else if (ch == '%') idx = 11;
+    else if (ch == '.') idx = 12;
+    else idx = 13;  // space
+
+    oled_write_cmd(0xB0 + (page & 0x07));    // Set page
+    oled_write_cmd(0x00 + (x & 0x0F));        // Column low
+    oled_write_cmd(0x10 + ((x >> 4) & 0x0F)); // Column high
+
+    uint8_t top[8], bot[8];
+    for (uint8_t i = 0; i < 8; i++) {
+        top[i] = font_8x16[idx][i];
+        bot[i] = font_8x16[idx][i + 8];
+    }
+    oled_write_data(top, 8);
+    oled_write_cmd(0xB0 + ((page + 1) & 0x07));
+    oled_write_cmd(0x00 + (x & 0x0F));
+    oled_write_cmd(0x10 + ((x >> 4) & 0x0F));
+    oled_write_data(bot, 8);
+}
+
+// Draw big number string at position (x page offset)
+static void oled_draw_num(uint8_t x, uint8_t page, uint32_t num) {
+    char buf[10];
+    uint8_t len = 0;
+    if (num == 0) { buf[len++] = '0'; }
+    else {
+        uint32_t n = num;
+        while (n) { n /= 10; len++; }
+        for (int8_t i = len - 1; i >= 0; i--) {
+            buf[i] = '0' + (num % 10);
+            num /= 10;
+        }
+    }
+    for (uint8_t i = 0; i < len; i++)
+        oled_draw_char(x + i * 8, page, buf[i]);
+}
+
+// ---- OLED page: show steps ----
+static void oled_show_steps(void) {
+    oled_clear();
+    oled_draw_num(8, 1, step_count > 99999 ? 99999 : step_count);
+    // "steps" label on line 3
+    uint8_t lbl[] = {'s','t','e','p','s'};
+    for (uint8_t i = 0; i < 5; i++)
+        oled_draw_char(12 + i * 8, 3, lbl[i]);
+}
+
+// ---- OLED page: show battery + time ----
+static void oled_show_status(void) {
+    oled_clear();
+    uint8_t bat = battery_percent();
+    oled_draw_num(0, 1, bat);
+    oled_draw_char(16, 1, '%');
+    uint32_t t = rtc_seconds();
+    uint8_t h = (t / 3600) % 24;
+    uint8_t m = (t / 60) % 60;
+    oled_draw_num(0, 3, h);
+    oled_draw_char(16, 3, ':');
+    oled_draw_num(24, 3, m);
+}
+
+// ============================================================
+// Button + Display handler
+// ============================================================
+#define BTN_PIN      GPIO_Pin_5
+#define OLED_TIMEOUT 5   // seconds OLED stays on after button press
 
 static void button_init(void) {
-    GPIOA_ModeCfg(BTN_PIN, GPIO_ModeIN_PU);  // Pull-up, active low
+    GPIOA_ModeCfg(BTN_PIN, GPIO_ModeIN_PU);
 }
 
 static bool button_pressed(void) {
     return !GPIOA_ReadPortPin(BTN_PIN);
+}
+
+// Button press cycles display: OFF → Steps → Status → OFF
+typedef enum { DISP_OFF, DISP_STEPS, DISP_STATUS } display_page_t;
+static display_page_t display_page = DISP_OFF;
+static uint32_t display_on_time;  // seconds when display was turned on
+
+static void button_handle(void) {
+    if (!button_pressed()) return;
+
+    // Debounce
+    for (volatile uint32_t i = 0; i < 600000; i++);
+
+    switch (display_page) {
+    case DISP_OFF:
+        display_page = DISP_STEPS;
+        oled_show_steps();
+        display_on_time = rtc_seconds();
+        // Green flash = activity reward
+        ws2812_set(0, 32, 0);
+        for (volatile uint32_t j = 0; j < 300000; j++);
+        ws2812_set(0, 0, 0);
+        break;
+    case DISP_STEPS:
+        display_page = DISP_STATUS;
+        oled_show_status();
+        display_on_time = rtc_seconds();
+        break;
+    case DISP_STATUS:
+        display_page = DISP_OFF;
+        oled_clear();
+        oled_write_cmd(0xAE);  // Display OFF
+        oled_on = false;
+        break;
+    }
+
+    // Wait for button release
+    while (button_pressed());
+}
+
+// Auto-off display after timeout
+static void display_timeout_check(void) {
+    if (display_page != DISP_OFF && oled_on) {
+        if (rtc_seconds() - display_on_time >= OLED_TIMEOUT) {
+            display_page = DISP_OFF;
+            oled_clear();
+            oled_write_cmd(0xAE);
+            oled_on = false;
+        }
+    }
 }
 
 // ============================================================
@@ -482,9 +698,12 @@ static void system_init(void) {
     // Clock: 60MHz HSI
     SetSysClock(CLK_SOURCE_HSI_60MHz);
 
-    // GPIO
-    led_init();
+    // GPIO + peripherals
+    ws2812_init();
     button_init();
+    oled_init();
+    oled_clear();
+    oled_write_cmd(0xAE);  // OLED off (save power)
 
     // I2C for IMU
     GPIOA_ModeCfg(GPIO_Pin_2|GPIO_Pin_3, GPIO_ModeIN_PU);
@@ -508,7 +727,7 @@ static void system_init(void) {
     // IMU init
     if (!imu_init()) {
         // Blink LED 3 times = IMU error
-        led_blink(3);
+                ws2812_set(32,0,0); for(volatile uint32_t _i=0;_i<1800000;_i++); ws2812_set(0,0,0); // Red x3 = error
     }
 }
 
@@ -534,7 +753,7 @@ int main(void) {
 
     // Start in SLEEP mode: IMU WOM + MCU deep sleep
     // IMU INT1 will wake us when child moves
-    led_blink(1);
+    ws2812_set(0,0,32); for(volatile uint32_t _i=0;_i<600000;_i++); ws2812_set(0,0,0); // Boot OK
 
     while (1) {
         now = rtc_seconds();
@@ -550,7 +769,7 @@ int main(void) {
             if (wom_triggered) {
                 // Vibration detected → switch to ACTIVE
                 imu_enter_active_mode();
-                led_blink(2);  // Signal: woke up
+                ws2812_set(0,32,0); for(volatile uint32_t _i=0;_i<900000;_i++); ws2812_set(0,0,0); // Woke up
                 continue;      // Skip sleep, go measure
             }
 
@@ -605,7 +824,7 @@ int main(void) {
             storage_write(&rec);
             step_count -= minute_steps;
             activity_seconds = 0;
-            led_set(1); for (volatile uint32_t i=0; i<30000; i++); led_set(0);
+            ws2812_set(0,8,0); for(volatile uint32_t i=0;i<30000;i++); ws2812_set(0,0,0);
         }
 
         // ---- Inactivity check: return to SLEEP ----
@@ -616,7 +835,7 @@ int main(void) {
                 if (inactive_minutes >= INACTIVE_MINUTES) {
                     // 5+ minutes no movement → back to SLEEP
                     imu_enter_wom_mode();
-                    led_blink(1);  // Signal: sleeping
+                    ws2812_set(32,16,0); for(volatile uint32_t _i=0;_i<900000;_i++); ws2812_set(0,0,0); // Sleeping
                     continue;
                 }
             } else {
@@ -656,11 +875,15 @@ int main(void) {
             }
         }
 
-        // ---- Button handler ----
-        if (button_pressed() && ble_connected) {
+        // ---- Button: toggle display, BLE sync ----
+        button_handle();
+        if (ble_connected && button_pressed() && display_page == DISP_OFF) {
+            // Long press when display is off → toggle BLE sync
             sync_active = !sync_active; sync_index = 0;
+            ws2812_set(0,0,32); for(volatile uint32_t i=0;i<600000;i++); ws2812_set(0,0,0);
             for (volatile uint32_t i=0; i<6000000; i++);
         }
+        display_timeout_check();
 
         // ---- Sleep 1 second ----
         __WFI();
