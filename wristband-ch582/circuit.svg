@@ -1,142 +1,150 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 600" font-family="monospace" font-size="11">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 620" font-family="monospace" font-size="10">
   <defs>
     <style>
       text { dominant-baseline: middle; text-anchor: middle; }
       .t { font-size: 14; font-weight: bold; }
-      .pn { font-size: 7; fill: #888; }
-      .pn2 { font-size: 8; }
+      .pn { font-size: 6; fill: #888; }
+      .pn2 { font-size: 7; }
       .w { stroke: #333; stroke-width: 1.5; fill: none; }
       .wv { stroke: #c00; stroke-width: 1.8; fill: none; }
-      .wg { stroke: #888; stroke-width: 1.2; fill: none; stroke-dasharray: 5,3; }
+      .wg { stroke: #888; stroke-width: 1.2; fill: none; stroke-dasharray: 4,2; }
       .ws { stroke: #25c; stroke-width: 1.5; fill: none; }
       .wr { stroke: #0a8; stroke-width: 1.5; fill: none; }
+      .wi { stroke: #a3c; stroke-width: 1.5; fill: none; }
       .comp { fill: #f8f8f8; stroke: #333; stroke-width: 1.5; }
       .chip { fill: #1a1a2e; stroke: #555; stroke-width: 1.5; }
       .ct { fill: #ddd; }
-      .ann { font-size: 7; fill: #666; }
+      .ann { font-size: 6; fill: #666; }
     </style>
   </defs>
 
-  <text x="350" y="22" class="t">Kids Activity Tracker — CH582M + ICM-42670-P 兒童運動手環</text>
+  <text x="375" y="20" class="t">Kids Activity Tracker 全配版 — 兒童運動記錄儀 · BOM ¥60</text>
+
+  <!-- CH582M center -->
+  <rect x="230" y="35" width="230" height="340" rx="6" class="chip"/>
+  <text x="345" y="55" class="ct" font-weight="bold" font-size="12">CH582M</text>
+  <text x="345" y="69" class="ct" font-size="8">QFN28 · RISC-V BLE5</text>
+
+  <!-- Left pins -->
+  <text x="238" y="95"  class="pn" text-anchor="end">PA0</text> <text x="235" y="106" class="pn2" fill="#f80">BAT_ADC</text>
+  <text x="238" y="120" class="pn" text-anchor="end">PA1</text> <text x="235" y="131" class="pn2" fill="#faf">IMU_INT</text>
+  <text x="238" y="145" class="pn" text-anchor="end">PA2</text> <text x="235" y="156" class="pn2" fill="#aaf">SDA</text>
+  <text x="238" y="170" class="pn" text-anchor="end">PA3</text> <text x="235" y="181" class="pn2" fill="#aaf">SCL</text>
+  <text x="238" y="195" class="pn" text-anchor="end">PA4</text> <text x="235" y="206" class="pn2" fill="#f88">WS2812</text>
+  <text x="238" y="220" class="pn" text-anchor="end">PA5</text> <text x="235" y="231" class="pn2" fill="#fff">BTN</text>
+  <text x="238" y="245" class="pn" text-anchor="end">PA6</text> <text x="235" y="256" class="pn2" fill="#5ff">VIB</text>
+  <text x="238" y="270" class="pn" text-anchor="end">PA7</text> <text x="235" y="281" class="pn2" fill="#f80">TEMP_ADC</text>
+  <text x="238" y="305" class="pn" text-anchor="end">PA8/9</text><text x="235" y="316" class="pn2" fill="#0f0">X32K</text>
+
+  <!-- Right pins -->
+  <text x="452" y="95"  class="pn" text-anchor="start">PB10</text> <text x="455" y="106" class="pn2" fill="#f66">USB_D+</text>
+  <text x="452" y="120" class="pn" text-anchor="start">PB11</text> <text x="455" y="131" class="pn2" fill="#f66">USB_D-</text>
+  <text x="452" y="145" class="pn" text-anchor="start">7,22</text> <text x="455" y="156" class="pn2" fill="#f66">VCC</text>
+  <text x="452" y="170" class="pn" text-anchor="start">9,21</text> <text x="455" y="181" class="pn2" fill="#999">GND</text>
 
   <!-- ============================================================ -->
-  <!-- CH582M QFN28 (center) -->
+  <!-- I2C Bus (shared: IMU + OLED + MAX30102) -->
   <!-- ============================================================ -->
-  <rect x="220" y="40" width="240" height="280" rx="6" class="chip"/>
-  <text x="340" y="62" class="ct" font-weight="bold" font-size="13">CH582M</text>
-  <text x="340" y="78" class="ct" font-size="9">RISC-V BLE 5.0 · QFN28</text>
+  <line x1="230" y1="150" x2="130" y2="150" class="ws"/>  <!-- SDA -->
+  <line x1="230" y1="175" x2="130" y2="175" class="ws"/>  <!-- SCL -->
+  <text x="180" y="140" font-size="7" fill="#25c">I²C Bus</text>
 
-  <!-- Left -->
-  <text x="228" y="105" class="pn" text-anchor="end">14</text> <text x="225" y="117" class="pn2" fill="#ff0">PA0 ADC(BAT)</text>
-  <text x="228" y="135" class="pn" text-anchor="end">15</text> <text x="225" y="147" class="pn2" fill="#ddd">PA1</text>
-  <text x="228" y="165" class="pn" text-anchor="end">16</text> <text x="225" y="177" class="pn2" fill="#aaf">PA2 SDA</text>
-  <text x="228" y="195" class="pn" text-anchor="end">17</text> <text x="225" y="207" class="pn2" fill="#aaf">PA3 SCL</text>
-  <text x="228" y="225" class="pn" text-anchor="end">18</text> <text x="225" y="237" class="pn2" fill="#f88">PA4 LED</text>
-  <text x="228" y="255" class="pn" text-anchor="end">19</text> <text x="225" y="267" class="pn2" fill="#f88">PA5 BTN</text>
-  <text x="228" y="285" class="pn" text-anchor="end">24</text> <text x="225" y="297" class="pn2" fill="#0f0">PA8 X32KI</text>
+  <!-- ICM-42670-P IMU (top-left) -->
+  <rect x="30" y="115" width="100" height="75" rx="5" class="chip"/>
+  <text x="80" y="132" class="ct" font-size="8" font-weight="bold">ICM-42670-P</text>
+  <text x="80" y="146" class="ct" font-size="7">6軸 IMU 0x68</text>
+  <line x1="30" y1="135" x2="130" y2="150" class="ws"/>
+  <line x1="30" y1="160" x2="130" y2="175" class="ws"/>
+  <line x1="30" y1="185" x2="230" y2="125" class="wi"/> <!-- INT1 → PA1 -->
+  <text x="140" y="190" font-size="6" fill="#a3c">INT1 → PA1</text>
 
-  <!-- Right -->
-  <text x="452" y="105" class="pn" text-anchor="start">25</text> <text x="455" y="117" class="pn2" fill="#0f0">PA9 X32KO</text>
-  <text x="452" y="135" class="pn" text-anchor="start">11</text> <text x="455" y="147" class="pn2" fill="#f66">PB10 USB_D+</text>
-  <text x="452" y="165" class="pn" text-anchor="start">12</text> <text x="455" y="177" class="pn2" fill="#f66">PB11 USB_D-</text>
-  <text x="452" y="195" class="pn" text-anchor="start">7,22</text><text x="455" y="207" class="pn2" fill="#f66">VCC 3.3V</text>
-  <text x="452" y="225" class="pn" text-anchor="start">9,21</text><text x="455" y="237" class="pn2" fill="#999">GND</text>
+  <!-- MAX30102 (bottom-left) -->
+  <rect x="30" y="400" width="110" height="75" rx="5" class="chip"/>
+  <text x="85" y="418" class="ct" font-size="8" font-weight="bold">MAX30102</text>
+  <text x="85" y="432" class="ct" font-size="7">心率血氧 0x57</text>
+  <line x1="30" y1="420" x2="130" y2="150" class="ws"/> <!-- SDA -->
+  <line x1="30" y1="445" x2="130" y2="175" class="ws"/> <!-- SCL -->
 
-  <!-- ============================================================ -->
-  <!-- ICM-42670-P IMU (bottom-left) -->
-  <!-- ============================================================ -->
-  <rect x="30" y="370" width="150" height="90" rx="6" class="chip"/>
-  <text x="105" y="390" class="ct" font-weight="bold">ICM-42670-P</text>
-  <text x="105" y="404" class="ct" font-size="8">6-axis IMU (I2C 0x68)</text>
-  <text x="35" y="425" class="pn" text-anchor="start">SDA → PA2</text>
-  <text x="35" y="445" class="pn" text-anchor="start">SCL → PA3</text>
-
-  <!-- I2C connections -->
-  <line x1="180" y1="425" x2="220" y2="170" class="ws"/>
-  <text x="200" y="300" font-size="7" fill="#25c">I²C</text>
-  <line x1="180" y1="445" x2="220" y2="200" class="ws"/>
-
-  <!-- IMU VCC/GND -->
-  <line x1="105" y1="370" x2="105" y2="355" class="wv"/>
-  <line x1="105" y1="460" x2="105" y2="475" class="wg"/>
+  <!-- SSD1306 OLED (top-right) -->
+  <rect x="510" y="115" width="100" height="75" rx="5" class="chip"/>
+  <text x="560" y="132" class="ct" font-size="8" font-weight="bold">SSD1306</text>
+  <text x="560" y="146" class="ct" font-size="7">OLED 0.49" 0x3C</text>
+  <line x1="510" y1="135" x2="460" y2="150" class="ws"/>
+  <line x1="510" y1="160" x2="460" y2="175" class="ws"/>
 
   <!-- ============================================================ -->
-  <!-- LiPo Battery + TP4056 -->
+  <!-- WS2812 RGB LED -->
   <!-- ============================================================ -->
-  <rect x="480" y="370" width="70" height="40" rx="4" fill="#eee" stroke="#333" stroke-width="1.5"/>
-  <text x="515" y="388" font-size="7">LiPo</text>
-  <text x="515" y="400" font-size="6" fill="#666">150mAh</text>
-
-  <rect x="480" y="430" width="70" height="35" rx="4" class="comp"/>
-  <text x="515" y="446" font-size="7">TP4056</text>
-  <text x="515" y="458" font-size="6" fill="#666">USB-C充電</text>
-
-  <!-- Battery → TP4056 → VCC -->
-  <line x1="515" y1="370" x2="515" y2="355" class="wv"/>
-  <line x1="515" y1="430" x2="515" y2="410" class="wv"/>
-  <line x1="515" y1="355" x2="340" y2="355" class="wv"/>
-  <text x="420" y="348" font-size="7" fill="#c00">VCC_BAT 3.7V</text>
-  <!-- LDO: 3.7V → 3.3V for MCU -->
-  <rect x="330" y="340" width="20" height="15" rx="2" fill="#fff" stroke="#c00" stroke-width="1"/>
-  <text x="340" y="350" font-size="5" fill="#c00">LDO</text>
-  <line x1="340" y1="355" x2="340" y2="340" class="wv"/>
-  <line x1="340" y1="340" x2="340" y2="320" class="wv"/>
-
-  <!-- VCC bus -->
-  <line x1="340" y1="320" x2="340" y2="285" class="wv"/>
-  <line x1="340" y1="285" x2="460" y2="285" class="wv"/>
-  <line x1="460" y1="285" x2="460" y2="200" class="wv"/>
-
-  <!-- Battery ADC monitoring -->
-  <line x1="515" y1="355" x2="530" y2="355" class="ws"/>
-  <line x1="530" y1="355" x2="530" y2="285" class="ws"/>
-  <line x1="530" y1="285" x2="460" y2="285" class="ws"/>
-  <text x="545" y="322" font-size="6" fill="#25c">VBAT_SENSE</text>
-
-  <!-- GND bus -->
-  <line x1="105" y1="475" x2="340" y2="475" class="wg"/>
-  <line x1="340" y1="475" x2="340" y2="355" class="wg"/>
-  <line x1="515" y1="465" x2="515" y2="475" class="wg"/>
+  <circle cx="310" cy="460" r="10" fill="#fff" stroke="#f88" stroke-width="1.5"/>
+  <text x="310" y="463" font-size="5">RGB</text>
+  <line x1="310" y1="450" x2="310" y2="430" class="ws"/>
+  <line x1="310" y1="430" x2="230" y2="430" class="ws"/>
+  <line x1="230" y1="430" x2="230" y2="200" class="ws"/>
 
   <!-- ============================================================ -->
-  <!-- 32.768KHz RTC Crystal -->
+  <!-- Button -->
   <!-- ============================================================ -->
-  <rect x="140" y="270" width="35" height="40" rx="8" class="comp"/>
-  <text x="157" y="285" font-size="6">32.768</text>
-  <text x="157" y="295" font-size="6">KHz</text>
-  <line x1="175" y1="280" x2="220" y2="290" class="wr"/>
-  <line x1="175" y1="300" x2="220" y2="135" class="wr"/>
+  <circle cx="380" cy="460" r="10" fill="#fff" stroke="#fff" stroke-width="1.5"/>
+  <text x="380" y="463" font-size="5">BTN</text>
+  <line x1="380" y1="450" x2="380" y2="430" class="ws"/>
+  <line x1="380" y1="430" x2="230" y2="430" class="ws"/>
+  <line x1="230" y1="430" x2="230" y2="225" class="ws"/>
+  <line x1="380" y1="470" x2="380" y2="490" class="wg"/>
 
   <!-- ============================================================ -->
-  <!-- LED + Button -->
+  <!-- Vibration Motor (PA6 → NPN → ERM) -->
   <!-- ============================================================ -->
-  <circle cx="300" cy="510" r="8" fill="#fff" stroke="#f88" stroke-width="1.5"/>
-  <text x="300" y="513" font-size="6" fill="#f88">LED</text>
-  <line x1="300" y1="502" x2="300" y2="480" class="ws"/>
-  <line x1="300" y1="480" x2="300" y2="320" class="ws"/>
-  <line x1="300" y1="320" x2="220" y2="320" class="ws"/>
-  <line x1="220" y1="320" x2="220" y2="230" class="ws"/>
-
-  <circle cx="400" cy="510" r="10" fill="#fff" stroke="#f88" stroke-width="1.5"/>
-  <text x="400" y="513" font-size="6" fill="#f88">BTN</text>
-  <line x1="400" y1="500" x2="400" y2="480" class="ws"/>
-  <line x1="400" y1="480" x2="400" y2="315" class="ws"/>
-  <line x1="400" y1="315" x2="220" y2="315" class="ws"/>
-  <line x1="220" y1="315" x2="220" y2="260" class="ws"/>
+  <circle cx="460" cy="460" r="14" fill="#fff" stroke="#5ff" stroke-width="1.5"/>
+  <text x="460" y="457" font-size="5">ERM</text>
+  <text x="460" y="468" font-size="5">震動</text>
+  <line x1="460" y1="446" x2="460" y2="420" class="ws"/>
+  <line x1="460" y1="420" x2="230" y2="420" class="ws"/>
+  <line x1="230" y1="420" x2="230" y2="250" class="ws"/>
+  <text x="340" y="415" font-size="6" fill="#25c">NPN(S8050)驅動</text>
 
   <!-- ============================================================ -->
-  <!-- USB Programming Port -->
+  <!-- Skin Temp NTC (PA7) -->
   <!-- ============================================================ -->
-  <rect x="580" y="140" width="45" height="30" rx="4" class="comp"/>
-  <text x="602" y="159" font-size="7">USB</text>
-  <line x1="580" y1="145" x2="460" y2="140" class="ws"/>
-  <line x1="580" y1="160" x2="460" y2="170" class="ws"/>
+  <path d="M190,520 L200,508 L205,528 L210,508 L215,528 L225,518" fill="none" stroke="#f80" stroke-width="1.5"/>
+  <text x="260" y="518" font-size="7" fill="#f80" text-anchor="start">NTC 100K (貼膚)</text>
+  <line x1="225" y1="518" x2="230" y2="518" class="ws"/>
+  <line x1="230" y1="518" x2="230" y2="275" class="ws"/>
+
+  <!-- ============================================================ -->
+  <!-- Power + Battery -->
+  <!-- ============================================================ -->
+  <rect x="560" y="400" width="80" height="35" rx="5" fill="#eee" stroke="#333" stroke-width="1.5"/>
+  <text x="600" y="414" font-size="8">LiPo 150mAh</text>
+  <text x="600" y="426" font-size="6" fill="#666">3.7V</text>
+  <line x1="560" y1="410" x2="500" y2="410" class="wv"/>
+  <line x1="500" y1="410" x2="460" y2="410" class="wv"/>
+  <line x1="460" y1="410" x2="460" y2="150" class="wv"/>
+  <text x="480" y="403" font-size="6" fill="#c00">VCC 3.3V</text>
+
+  <rect x="560" y="455" width="80" height="35" rx="5" fill="#fff" stroke="#333" stroke-width="1.5"/>
+  <text x="600" y="468" font-size="7">TP4056</text>
+  <text x="600" y="480" font-size="6" fill="#666">USB-C 充電</text>
+
+  <!-- ============================================================ -->
+  <!-- 32.768KHz Crystal -->
+  <!-- ============================================================ -->
+  <rect x="140" y="290" width="35" height="35" rx="6" class="comp"/>
+  <text x="157" y="303" font-size="5">32K</text>
+  <text x="157" y="314" font-size="5">晶振</text>
+  <line x1="175" y1="300" x2="230" y2="310" class="wr"/>
+
+  <!-- ============================================================ -->
+  <!-- NFC Sticker (passive, no wiring) -->
+  <!-- ============================================================ -->
+  <rect x="580" y="510" width="70" height="30" rx="15" fill="#e8f5e9" stroke="#4caf50" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <text x="615" y="525" font-size="7" fill="#4caf50">NTAG 貼片</text>
+  <text x="615" y="537" font-size="6" fill="#4caf50">(被動·免接線)</text>
 
   <!-- ============================================================ -->
   <!-- Legend -->
   <!-- ============================================================ -->
-  <rect x="30" y="530" width="640" height="60" rx="6" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
-  <text x="45" y="548" font-size="10" font-weight="bold" fill="#333" text-anchor="start">兒童運動記錄儀 · CH582M + ICM-42670-P · BLE同步 · 快閃儲存 · 150mAh LiPo</text>
-  <text x="45" y="565" font-size="8" fill="#555" text-anchor="start">每分鐘記錄: 步數+活動秒數+強度(8 bytes)。280KB快閃≈24天資料。BLE連線後一鍵同步到家長手機。閃存滿自動環形覆蓋。</text>
-  <text x="45" y="580" font-size="8" fill="#555" text-anchor="start">功耗: 休眠(1μA)+IMU(0.7mA@25Hz)+BLE廣告(~5μA avg)≈0.7mA→150mAh≈8天。純待機(不開IMU)可達30天。</text>
+  <rect x="30" y="555" width="690" height="60" rx="5" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
+  <text x="45" y="572" font-size="10" font-weight="bold" fill="#333" text-anchor="start">全配版 BOM: CH582(¥3)+IMU(¥8)+MAX30102(¥15)+OLED(¥8)+WS2812(¥0.5)+震動(¥2)+NTC(¥1)+NTAG(¥1)+電池(¥10)+充電(¥2)+PCB外殼(¥5)+被動(¥3)=¥60</text>
+  <text x="45" y="590" font-size="9" fill="#555" text-anchor="start">I²C 匯流排共享: IMU(0x68)+OLED(0x3C)+MAX30102(0x57)。PA1=IMU INT1(震動喚醒)。PA6=震動馬達(NPN驅動)。PA7=貼膚NTC。NTAG=被動貼片免接線。</text>
+  <text x="45" y="606" font-size="9" fill="#555" text-anchor="start">續航: 白天計步+心率10分測一次+夜間睡眠連續心率≈5-7天(150mAh)。OLED按鈕才亮(5秒自動熄滅)。</text>
 </svg>

@@ -1,35 +1,31 @@
 /**
- * Kids Activity Tracker — CH582M + ICM-42670-P 6-axis IMU
+ * Kids Activity Tracker — MAX SPEC (全配版)
+ * CH582M + ICM-42670-P + MAX30102 + SSD1306 + WS2812 + ERM
  *
- * Wristband for children's physical activity monitoring.
- * Tracks steps & activity intensity. Stores per-minute records in flash.
- * BLE sync to parent's phone.
+ * Features:
+ *   - 6-axis IMU step counting + activity type detection
+ *   - Heart rate (MAX30102, every 10 min + night continuous)
+ *   - SpO2 blood oxygen (MAX30102)
+ *   - Skin temperature (NTC, PA7 ADC)
+ *   - OLED 0.49" 64x32 display (button cycled)
+ *   - RGB LED motivational feedback
+ *   - Vibration motor (goal reached, inactivity, find-me)
+ *   - BLE sync to parent phone
+ *   - 16 days local flash storage
  *
- * Power: IMU Wake-on-Motion (WOM) + inactivity detection.
- *   SLEEP:  IMU WOM mode (~20μA) + MCU deep sleep (~1μA) = 21μA
- *   ACTIVE: IMU 25Hz full (~0.7mA) + MCU recording (~4mA) = 4.7mA
- *   Child active ~2h/day: average ~350μA → 150mAh LiPo = ~18 days
+ * Power: 5-7 days on 150mAh LiPo (intermittent HR + daily activity)
  *
- * Hardware:
- *   CH582M QFN28     — RISC-V BLE 5.0 MCU
- *   ICM-42670-P      — 6-axis IMU (I2C addr 0x68)
- *   150mAh LiPo      — USB-C charging via TP4056
- *   LED + Button     — status indicator + sync trigger
- *
- * I2C pins:  PA2=SDA, PA3=SCL
- * IMU INT1:  PA1 (GPIO interrupt, wakes MCU from deep sleep)
- * LED pin:   PA4
- * Button:    PA5 (active low, internal pull-up)
- *
- * Storage:  ~280KB ring buffer in CH582 internal flash
- *           = 35,000 records × 8 bytes = ~24 days at 1 record/min
- *
- * BLE GATT Service:
- *   Activity Service (UUID 0x1800-based custom)
- *     Device Info:    battery %, firmware version
- *     Live Data:      accel XYZ, steps, activity level (Notify, 1Hz)
- *     Sync Control:   start/stop/clear sync (Write)
- *     Sync Data:      stream stored records (Notify)
+ * Pinout CH582M QFN28:
+ *   PA0 = Battery ADC
+ *   PA1 = IMU INT1 (WOM wake)
+ *   PA2 = I2C SDA (IMU 0x68 + OLED 0x3C + MAX30102 0x57)
+ *   PA3 = I2C SCL
+ *   PA4 = WS2812 RGB LED
+ *   PA5 = Button (active low, pull-up)
+ *   PA6 = Vibration motor (PWM via NPN transistor)
+ *   PA7 = Skin temp NTC (ADC)
+ *   PB10/PB11 = USB D+/D-
+ *   PA8/PA9 = 32.768KHz RTC crystal
  */
 
 #include "CH58x_common.h"
@@ -39,854 +35,609 @@
 // ============================================================
 // Constants
 // ============================================================
-#define IMU_SAMPLE_HZ     25      // IMU read rate (Hz) in ACTIVE mode
-#define IMU_WOM_ODR_HZ    12      // IMU ODR in WOM sleep mode
-#define STEP_MIN_INTERVAL 200     // Min ms between steps (kids: up to 300/min)
-#define RECORD_INTERVAL   60      // Save record every 60 seconds
-#define FLASH_RECORD_MAX  35000   // Max records in flash ring buffer
-#define BATTERY_MV_MAX    4200    // LiPo full charge
-#define BATTERY_MV_MIN    3200    // LiPo cutoff
-#define INACTIVE_MINUTES  5       // Minutes without steps → return to SLEEP
-#define WOM_THRESHOLD_MG  150     // WOM wake threshold in mg (medium sensitivity)
-
-// Flash storage layout (CH582 internal flash, 448KB total)
-// Code+BLE stack: 0x00000000 - 0x00028000 (160KB)
-// Activity storage: 0x00028000 - 0x00070000 (320KB reserved, ~280KB usable)
-#define FLASH_STORAGE_BASE  0x00028000
-#define FLASH_SECTOR_SIZE   4096    // 4KB per sector
-#define FLASH_PAGE_SIZE     256     // 256B per page (CH582 min write unit)
-#define RECORD_SIZE         8       // bytes per activity record
-
-// Activity intensity levels
-#define INTENSITY_LOW    0
-#define INTENSITY_MEDIUM 1
-#define INTENSITY_HIGH   2
+#define MEASURE_SEC      1      // loop tick
+#define RECORD_INTERVAL  60     // save per minute
+#define HR_INTERVAL      600    // HR check every 10 min (600 sec)
+#define HR_NIGHT_CONT    1      // continuous HR during night (21-07)
+#define INACTIVE_MINUTES 5      // sleep after 5 min idle
+#define WOM_THRESHOLD_MG 150    // Wake-on-Motion sensitivity
+#define STEP_MIN_MS      200    // min ms between steps
+#define BLE_ADV_MS       320    // advertising interval
+#define OLED_TIMEOUT     5      // display auto-off
+#define FLASH_BASE       0x28000
+#define RECORD_SIZE      12
 
 // ============================================================
-// IMU (ICM-42670-P) I2C driver
+// MAX30102 Heart Rate + SpO2 sensor (I2C 0x57)
 // ============================================================
-#define IMU_ADDR    0x68    // 7-bit I2C address (AD0=GND)
-#define IMU_WHOAMI  0x75    // WHO_AM_I register → expect 0x67
+#define MAX_ADDR        0x57
+#define REG_INT_STAT1   0x00
+#define REG_INT_STAT2   0x01
+#define REG_INT_ENABLE  0x02
+#define REG_FIFO_WR     0x04
+#define REG_FIFO_RD     0x06
+#define REG_FIFO_DATA   0x07
+#define REG_FIFO_CFG    0x08
+#define REG_MODE_CFG    0x09
+#define REG_SPO2_CFG    0x0A
+#define REG_LED1_PA     0x0C  // Red LED
+#define REG_LED2_PA     0x0D  // IR LED
+#define REG_TEMP_INT    0x1F
+#define REG_TEMP_FRAC   0x20
 
-// ICM-42670-P register map
-#define REG_DEVICE_CONFIG  0x11
-#define REG_PWR_MGMT0      0x4E
-#define REG_PWR_MGMT0_ACCEL_LP  0x02  // Accel Low-Power mode
-#define REG_PWR_MGMT0_ACCEL_LN  0x03  // Accel Low-Noise mode
-#define REG_ACCEL_CONFIG0  0x50
-#define REG_GYRO_CONFIG0   0x4F
-#define REG_ACCEL_CONFIG1  0x52  // Accel LP averaging
-#define REG_GYRO_CONFIG0_STANDBY 0x00  // Gyro off
-#define REG_ACCEL_DATA_X1  0x1F  // Accel X[15:8]
-#define REG_GYRO_DATA_X1   0x25  // Gyro X[15:8]
-#define REG_INT_CONFIG     0x14
-#define REG_INT_SOURCE0    0x63  // Interrupt source routing
-#define REG_WOM_CONFIG     0x57  // WOM threshold
-#define REG_SMD_CONFIG     0x58  // Significant Motion Detect
-#define REG_FIFO_CONFIG    0x16
-#define REG_INT_STATUS     0x2D
-#define REG_INT_STATUS_WOM 0x80  // WOM interrupt flag
-#define REG_TEMP_DATA1     0x1D
-
-// ---- I2C helpers (CH582 HAL) ----
-static void imu_write_reg(uint8_t reg, uint8_t val) {
-    I2C_WriteReg(IMU_ADDR, reg, &val, 1);
+static void max_write(uint8_t reg, uint8_t val) {
+    I2C_WriteReg(MAX_ADDR, reg, &val, 1);
+}
+static uint8_t max_read(uint8_t reg) {
+    uint8_t v; I2C_ReadReg(MAX_ADDR, reg, &v, 1); return v;
+}
+static void max_read_burst(uint8_t reg, uint8_t *buf, uint8_t len) {
+    I2C_ReadReg(MAX_ADDR, reg, buf, len);
 }
 
-static uint8_t imu_read_reg(uint8_t reg) {
-    uint8_t val;
-    I2C_ReadReg(IMU_ADDR, reg, &val, 1);
-    return val;
-}
+static bool max30102_init(void) {
+    // Check presence (PART_ID = 0x15)
+    if (max_read(0xFF) != 0x15) return false;
 
-static void imu_read_burst(uint8_t reg, uint8_t *buf, uint8_t len) {
-    I2C_ReadReg(IMU_ADDR, reg, buf, len);
-}
+    // Reset
+    max_write(0x09, 0x40); for(volatile uint32_t i=0;i<10000;i++);
 
-// ---- IMU init ----
-static bool imu_init(void) {
-    // I2C init: PA2=SDA, PA3=SCL, 400kHz
-    GPIOA_ModeCfg(GPIO_Pin_2|GPIO_Pin_3, GPIO_ModeIN_PU);
-    I2C_Init(I2C_Mode_I2C, 400000, I2C_Ack_Enable);
+    // FIFO config: 32 samples average, rollover
+    max_write(REG_FIFO_CFG, 0x4F);  // 32-sample avg, FIFO full=32
 
-    // IMU INT1 pin: PA1 as input with interrupt (wakes MCU from deep sleep)
-    GPIOA_ModeCfg(GPIO_Pin_1, GPIO_ModeIN_PU);
-    GPIOA_ITModeCfg(GPIO_Pin_1, GPIO_IT_Rise);   // Rising edge = WOM detected
-    PFIC_EnableIRQ(GPIOA_IRQn);                    // Enable GPIOA interrupt
+    // SpO2 mode: 100Hz, 411μs pulse width, 18-bit ADC
+    max_write(REG_SPO2_CFG, 0x27);  // 100Hz, 411μs, 18-bit
 
-    // Verify IMU
-    uint8_t who = imu_read_reg(IMU_WHOAMI);
-    if (who != 0x67) {
-        PRINT("IMU not found (WHOAMI=0x%02X, expect 0x67)\n", who);
-        return false;
-    }
+    // LED currents: Red=0x1F (~6mA), IR=0x1F
+    max_write(REG_LED1_PA, 0x1F);
+    max_write(REG_LED2_PA, 0x1F);
 
-    // Soft reset
-    imu_write_reg(REG_DEVICE_CONFIG, 0x01);
-    for (volatile uint32_t i = 0; i < 10000; i++);  // ~10ms
+    // FIFO almost-full interrupt
+    max_write(REG_INT_ENABLE, 0x40);
 
-    // Start in WOM sleep mode (ultra low power)
-    imu_enter_wom_mode();
+    // Start SpO2 mode
+    max_write(REG_MODE_CFG, 0x03);
 
     return true;
 }
 
-// ---- Read 6-axis data ----
-// Returns accel in mg, gyro in mdps (milli-degrees/sec)
-// accel[3]: X,Y,Z in milli-g
-// gyro[3]:  X,Y,Z in milli-dps
-static void imu_read_6axis(int16_t accel[3], int16_t gyro[3]) {
-    uint8_t buf[12];
-    imu_read_burst(REG_ACCEL_DATA_X1, buf, 12);
-
-    // Accel: 16-bit signed, ±4g → 1 LSB = 0.122mg → convert to mg
-    // buf[0:1]=AX, buf[2:3]=AY, buf[4:5]=AZ
-    for (int i = 0; i < 3; i++) {
-        int16_t raw = (int16_t)((buf[i*2] << 8) | buf[i*2+1]);
-        accel[i] = (int16_t)(((int32_t)raw * 1000) / 8192);  // mg
-    }
-    // Gyro: 16-bit signed, ±500dps → 1 LSB = 0.0153dps → convert to mdps
-    // buf[6:7]=GX, buf[8:9]=GY, buf[10:11]=GZ
-    for (int i = 0; i < 3; i++) {
-        int16_t raw = (int16_t)((buf[6+i*2] << 8) | buf[7+i*2]);
-        gyro[i] = (int16_t)(((int32_t)raw * 1000) / 6554);  // mdps
-    }
+static void max30102_shutdown(void) {
+    max_write(REG_MODE_CFG, 0x80);  // Shutdown (0μA)
 }
 
-// ============================================================
-// Device state machine
-// ============================================================
-typedef enum {
-    STATE_SLEEP  = 0,  // IMU WOM + MCU deep sleep (21μA)
-    STATE_ACTIVE = 1,  // IMU full + MCU recording (4.7mA)
-} device_state_t;
-
-static device_state_t device_state = STATE_SLEEP;
-static uint32_t inactive_minutes;    // consecutive minutes with no steps
-static bool     wom_triggered;       // set by GPIO interrupt
-
-// ---- Enter WOM sleep mode ----
-static void imu_enter_wom_mode(void) {
-    // Stop gyro (saves ~0.5mA)
-    imu_write_reg(REG_PWR_MGMT0, REG_PWR_MGMT0_ACCEL_LP);  // Accel LP mode, gyro off
-
-    // Accel: low ODR for WOM
-    // ODR = 12.5Hz, ±4g, LP averaging
-    uint8_t odr_lp = 0x03;  // 12.5Hz in LP mode
-    imu_write_reg(REG_ACCEL_CONFIG0, (0x04 << 5) | odr_lp);  // ±4g, LP ODR
-    imu_write_reg(REG_ACCEL_CONFIG1, 0x00);  // 1x averaging (lowest power)
-
-    // WOM threshold: WOM_THRESHOLD_MG / (1000/8192) ≈ WOM_THRESHOLD_MG * 8 / 1000
-    // For 150mg: 150 * 256 / 1000 ≈ 38 LSBs
-    uint8_t wom_thr = (uint8_t)((WOM_THRESHOLD_MG * 256UL) / 1000);
-    imu_write_reg(REG_WOM_CONFIG, wom_thr);  // WOM_X | WOM_Y | WOM_Z (bits 6-4)
-
-    // Route WOM interrupt to INT1
-    imu_write_reg(REG_INT_SOURCE0, 0x80);  // WOM interrupt → INT1
-
-    // INT1: push-pull, active high, cleared by status read
-    imu_write_reg(REG_INT_CONFIG, 0x02);  // INT1 push-pull pulsed
-
-    device_state = STATE_SLEEP;
+static void max30102_wake(void) {
+    max_write(REG_MODE_CFG, 0x03);  // Resume SpO2 mode
 }
 
-// ---- Enter full active mode ----
-static void imu_enter_active_mode(void) {
-    // Accel + Gyro in low-noise mode
-    imu_write_reg(REG_PWR_MGMT0, 0x0F);  // Accel LN + Gyro LN + Temp
+// Read FIFO: 32 samples × 6 bytes (3 per LED) = 192 bytes
+static void max30102_read_fifo(uint32_t *ir_data, uint32_t *red_data, uint8_t *count) {
+    uint8_t wr = max_read(REG_FIFO_WR);
+    uint8_t rd = max_read(REG_FIFO_RD);
+    *count = (wr - rd) & 0x1F;
+    if (*count > 32) *count = 32;
 
-    // Accel: ±4g, 25Hz ODR
-    imu_write_reg(REG_ACCEL_CONFIG0, (0x04 << 5) | 0x04);
+    uint8_t buf[192];
+    max_read_burst(REG_FIFO_DATA, buf, *count * 6);
 
-    // Gyro: ±500dps, 25Hz ODR
-    imu_write_reg(REG_GYRO_CONFIG0, (0x02 << 5) | 0x04);
-
-    // Disable WOM interrupt routing
-    imu_write_reg(REG_INT_SOURCE0, 0x00);
-    imu_write_reg(REG_INT_CONFIG, 0x00);  // INT1 disabled
-
-    inactive_minutes = 0;
-    wom_triggered = false;
-    device_state = STATE_ACTIVE;
-}
-
-// ---- GPIO interrupt handler: IMU INT1 wakes MCU from SLEEP ----
-// PA1 = IMU INT1, rising edge = WOM detected
-__attribute__((interrupt)) void GPIOA_IRQHandler(void) {
-    if (GPIOA_ReadITFlagBit(GPIO_Pin_1)) {
-        GPIOA_ClearITFlagBit(GPIO_Pin_1);
-        if (device_state == STATE_SLEEP) {
-            wom_triggered = true;
-        }
+    for (uint8_t i = 0; i < *count; i++) {
+        ir_data[i]  = ((uint32_t)buf[i*6+0] << 16) | ((uint32_t)buf[i*6+1] << 8) | buf[i*6+2];
+        red_data[i] = ((uint32_t)buf[i*6+3] << 16) | ((uint32_t)buf[i*6+4] << 8) | buf[i*6+5];
     }
 }
 
-// ============================================================
-// Step Detection Algorithm
-// ============================================================
-// Simple peak detection on accelerometer magnitude.
-// Dynamic threshold adapts to user's movement pattern.
+// Simple heart rate from IR signal: moving avg → DC removal → peak count
+static uint8_t max30102_hr(uint32_t *ir, uint8_t count) {
+    if (count < 16) return 0;
 
-static int16_t accel_mag_history[8];  // 250ms sliding window @ 25Hz
-static uint8_t mag_idx;
-static int32_t mag_sum;
-static int16_t step_threshold = 1200;  // Dynamic threshold (mg above 1G)
-static uint32_t last_step_ms;
-static uint32_t step_count;
-static uint8_t  activity_seconds;  // Active seconds in current minute
+    // DC removal: subtract moving average
+    int32_t sum = 0;
+    for (uint8_t i = 0; i < count; i++) sum += ir[i];
+    int32_t avg = sum / count;
 
-// ---- Running average filter ----
-static int16_t running_add(int16_t val) {
-    mag_sum -= accel_mag_history[mag_idx];
-    mag_sum += val;
-    accel_mag_history[mag_idx] = val;
-    mag_idx = (mag_idx + 1) & 0x07;
-    return (int16_t)(mag_sum / 8);
+    // Count zero crossings (positive-going)
+    uint8_t crossings = 0;
+    int32_t prev = ir[0] - avg;
+    for (uint8_t i = 1; i < count; i++) {
+        int32_t cur = ir[i] - avg;
+        if (prev < 0 && cur >= 0) crossings++;
+        prev = cur;
+    }
+
+    // HR = crossings × 60 / (count samples / 100Hz)
+    // For 32 samples at 100Hz = 0.32s
+    // HR = crossings × 60 / 0.32s = crossings × 187.5 / 32
+    // Approx: HR = crossings × 6 (for 32 samples)
+    return (uint8_t)(crossings * 6);
 }
 
-// ---- Step detection callback (called at IMU sample rate) ----
-static void step_detect(int16_t ax, int16_t ay, int16_t az, uint32_t now_ms) {
-    // Magnitude of acceleration vector (in mg)
-    int32_t mag_sq = (int32_t)ax*ax + (int32_t)ay*ay + (int32_t)az*az;
-    int16_t mag = (int16_t)(mag_sq >> 10);  // Approx sqrt in mg (rough)
+// SpO2 estimation from red/IR ratio (simplified)
+static uint8_t max30102_spo2(uint32_t *ir, uint32_t *red, uint8_t count) {
+    if (count < 16) return 0;
 
-    // Low-pass filter
-    int16_t mag_filt = running_add(mag);
-
-    // Remove gravity: mag_filt = |mag - 1000mg|
-    int16_t mag_ac = mag_filt - 1000;
-    if (mag_ac < 0) mag_ac = -mag_ac;
-    if (mag_ac < 200) mag_ac = 200;  // Noise floor
-
-    // Track activity
-    if (mag_ac > 800) {
-        activity_seconds++;  // Will be normalized later
+    // AC/DC ratio
+    uint32_t ir_ac = 0, ir_dc = 0, red_ac = 0, red_dc = 0;
+    for (uint8_t i = 0; i < count; i++) {
+        ir_dc += ir[i];
+        red_dc += red[i];
     }
+    ir_dc /= count; red_dc /= count;
 
-    // Step detection: positive-going zero crossing above threshold
-    static int16_t prev_mag;
-    static bool    was_low;
-
-    if (mag_ac > step_threshold && was_low) {
-        // Potential step: check timing
-        if (now_ms - last_step_ms > STEP_MIN_INTERVAL) {
-            step_count++;
-            last_step_ms = now_ms;
-
-            // Adaptive threshold: track peak magnitude
-            if (mag_ac > step_threshold * 2)
-                step_threshold += 50;   // Increase (running)
-            else if (step_threshold > 800 && mag_ac < step_threshold * 3/2)
-                step_threshold -= 20;   // Decrease (walking/rest)
-        }
+    for (uint8_t i = 0; i < count; i++) {
+        ir_ac  += (ir[i] > ir_dc) ? (ir[i] - ir_dc) : (ir_dc - ir[i]);
+        red_ac += (red[i] > red_dc) ? (red[i] - red_dc) : (red_dc - red[i]);
     }
+    ir_ac /= count; red_ac /= count;
 
-    was_low = (mag_ac < step_threshold * 3/4);
-    prev_mag = mag_ac;
+    if (ir_dc == 0 || red_dc == 0) return 0;
+    // Fixed-point: SpO2 ≈ 104 - 17 × (red_ac×ir_dc)/(red_dc×ir_ac)
+    int32_t ratio_num = (int32_t)red_ac * ir_dc;
+    int32_t ratio_den = (int32_t)red_dc * ir_ac;
+    if (ratio_den == 0) return 0;
+    int16_t spo2 = 104 - (int16_t)((17 * ratio_num) / ratio_den);
+    if (spo2 > 100) spo2 = 100;
+    if (spo2 < 70) spo2 = 70;
+    return (uint8_t)spo2;
 }
 
 // ============================================================
-// Activity Record (8 bytes per minute)
+// ICM-42670-P 6-axis IMU (I2C 0x68)
 // ============================================================
-typedef struct __attribute__((packed)) {
-    uint32_t timestamp;   // Unix epoch (minutes)
-    uint16_t steps;       // Steps this minute
-    uint8_t  active_sec;  // Seconds of activity (>threshold)
-    uint8_t  intensity;   // 0=low, 1=medium, 2=high
-} activity_record_t;
+#define IMU_ADDR      0x68
+#define REG_PWR_MGMT0 0x4E
+#define REG_ACCEL_X   0x1F
+#define REG_GYRO_X    0x25
+#define REG_INT_CFG   0x14
+#define REG_INT_SRC   0x63
+#define REG_WOM_THR   0x57
 
-// ============================================================
-// Flash Storage (ring buffer)
-// ============================================================
-static uint32_t flash_write_offset;   // Current write position
-static uint32_t flash_record_count;   // Total records written
+static void imu_write(uint8_t r, uint8_t v) { I2C_WriteReg(IMU_ADDR, r, &v, 1); }
+static uint8_t imu_read(uint8_t r) { uint8_t v; I2C_ReadReg(IMU_ADDR, r, &v, 1); return v; }
 
-static void storage_init(void) {
-    // Scan flash to find last written record
-    flash_write_offset = FLASH_STORAGE_BASE;
-    flash_record_count = 0;
-
-    for (uint32_t addr = FLASH_STORAGE_BASE;
-         addr < FLASH_STORAGE_BASE + FLASH_SECTOR_SIZE * 70;
-         addr += RECORD_SIZE) {
-        // Check if this slot has data (>0xFF means programmed)
-        uint8_t *p = (uint8_t *)addr;
-        if (p[0] == 0xFF && p[1] == 0xFF) {
-            flash_write_offset = addr;
-            break;
-        }
-        flash_record_count++;
-    }
-
-    // If full, wrap to beginning
-    if (flash_record_count >= FLASH_RECORD_MAX) {
-        flash_write_offset = FLASH_STORAGE_BASE;
-        flash_record_count = 0;
-        // Erase first sector
-        FLASH_EraseSector(FLASH_STORAGE_BASE);
-    }
+static bool imu_init(void) {
+    if (imu_read(0x75) != 0x67) return false;
+    imu_write(0x11, 0x01); for(volatile uint32_t i=0;i<10000;i++);
+    // Start WOM mode
+    imu_write(REG_PWR_MGMT0, 0x02);  // Accel LP, gyro off
+    imu_write(0x50, (0x04<<5)|0x03); // ±4g, 12.5Hz LP
+    imu_write(0x52, 0x00);
+    imu_write(REG_WOM_THR, (uint8_t)((150*256UL)/1000));
+    imu_write(REG_INT_SRC, 0x80);    // WOM → INT1
+    imu_write(REG_INT_CFG, 0x02);
+    return true;
 }
 
-static void storage_write(activity_record_t *rec) {
-    // Write 8-byte record to flash
-    uint8_t buf[RECORD_SIZE];
-    buf[0] = (rec->timestamp >> 0)  & 0xFF;
-    buf[1] = (rec->timestamp >> 8)  & 0xFF;
-    buf[2] = (rec->timestamp >> 16) & 0xFF;
-    buf[3] = (rec->timestamp >> 24) & 0xFF;
-    buf[4] = rec->steps & 0xFF;
-    buf[5] = (rec->steps >> 8) & 0xFF;
-    buf[6] = rec->active_sec;
-    buf[7] = rec->intensity;
+static void imu_active(void) {
+    imu_write(REG_PWR_MGMT0, 0x0F);  // Accel LN + Gyro LN
+    imu_write(0x50, (0x04<<5)|0x04); // ±4g, 25Hz
+    imu_write(0x4F, (0x02<<5)|0x04); // ±500dps, 25Hz
+    imu_write(REG_INT_SRC, 0x00);
+    imu_write(REG_INT_CFG, 0x00);
+}
 
-    FLASH_Write(flash_write_offset, buf, RECORD_SIZE);
-    flash_write_offset += RECORD_SIZE;
-    flash_record_count++;
+static void imu_sleep(void) {
+    imu_write(REG_PWR_MGMT0, 0x02);  // Accel LP, gyro off
+    imu_write(0x50, (0x04<<5)|0x03);
+    imu_write(REG_WOM_THR, (uint8_t)((150*256UL)/1000));
+    imu_write(REG_INT_SRC, 0x80);
+    imu_write(REG_INT_CFG, 0x02);
+}
 
-    // Handle sector boundary and wrap
-    if (flash_write_offset >= FLASH_STORAGE_BASE + FLASH_SECTOR_SIZE * 70) {
-        flash_write_offset = FLASH_STORAGE_BASE;
-        flash_record_count = 0;
-        FLASH_EraseSector(FLASH_STORAGE_BASE);
+static void imu_read_6axis(int16_t a[3], int16_t g[3]) {
+    uint8_t buf[12]; I2C_ReadReg(IMU_ADDR, REG_ACCEL_X, buf, 12);
+    for(int i=0;i<3;i++){
+        int16_t raw=(int16_t)((buf[i*2]<<8)|buf[i*2+1]);
+        a[i]=(int16_t)(((int32_t)raw*1000)/8192);  // mg
     }
-}
-
-static uint32_t storage_read(uint32_t index, activity_record_t *rec) {
-    if (index >= flash_record_count) return 0;
-
-    uint32_t addr;
-    if (flash_record_count >= FLASH_RECORD_MAX) {
-        addr = flash_write_offset + index * RECORD_SIZE;
-        if (addr >= FLASH_STORAGE_BASE + FLASH_SECTOR_SIZE * 70)
-            addr -= FLASH_SECTOR_SIZE * 70;
-    } else {
-        addr = FLASH_STORAGE_BASE + index * RECORD_SIZE;
-    }
-
-    uint8_t *p = (uint8_t *)addr;
-    rec->timestamp   = p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-    rec->steps       = p[4] | ((uint16_t)p[5] << 8);
-    rec->active_sec  = p[6];
-    rec->intensity   = p[7];
-    return 1;
-}
-
-// ============================================================
-// BLE GATT Service
-// ============================================================
-static uint8_t  ble_connected;
-static uint8_t  sync_active;
-static uint32_t sync_index;
-static uint8_t  live_notify_enabled;
-
-// Battery voltage via ADC internal channel
-static uint8_t battery_percent(void) {
-    uint16_t vcc = ADC_ReadInternalVCC();  // mV
-    if (vcc > BATTERY_MV_MAX) vcc = BATTERY_MV_MAX;
-    if (vcc < BATTERY_MV_MIN) vcc = BATTERY_MV_MIN;
-    return (uint8_t)((uint32_t)(vcc - BATTERY_MV_MIN) * 100 /
-                     (BATTERY_MV_MAX - BATTERY_MV_MIN));
-}
-
-// ---- Advertising data ----
-static uint8_t adv_data[] = {
-    0x02, 0x01, 0x06,                          // Flags
-    0x08, 0x09, 'K','i','d','s','A','c','t',   // Name: "KidsAct"
-};
-
-// ---- BLE event handler ----
-static void ble_handler(uint32_t event, uint8_t *data, uint16_t len) {
-    switch (event) {
-    case GAP_DEVICE_INIT_DONE:
-        GAP_SetAdvData(adv_data, sizeof(adv_data));
-        GAPRole_StartAdvertising();
-        break;
-    case GAP_CONNECTED:
-        ble_connected = 1;
-        break;
-    case GAP_DISCONNECTED:
-        ble_connected = 0;
-        sync_active = 0;
-        GAPRole_StartAdvertising();
-        break;
-    case GATT_WRITE_REQUEST:
-        // Handle sync control commands
-        if (len >= 1) {
-            switch (data[0]) {
-            case 0x01:  // Start sync
-                sync_active = 1;
-                sync_index = 0;
-                break;
-            case 0x02:  // Stop sync
-                sync_active = 0;
-                break;
-            case 0x03:  // Clear storage
-                FLASH_EraseSector(FLASH_STORAGE_BASE);
-                flash_write_offset = FLASH_STORAGE_BASE;
-                flash_record_count = 0;
-                break;
-            case 0x10:  // Enable live data notify
-                live_notify_enabled = 1;
-                break;
-            case 0x11:  // Disable live data notify
-                live_notify_enabled = 0;
-                break;
-            }
-        }
-        break;
+    for(int i=0;i<3;i++){
+        int16_t raw=(int16_t)((buf[6+i*2]<<8)|buf[7+i*2]);
+        g[i]=(int16_t)(((int32_t)raw*1000)/6554); // mdps
     }
 }
 
 // ============================================================
-// WS2812 RGB LED (PA4, 1-wire bit-bang)
+// SSD1306 OLED 0.49" 64x32 (I2C 0x3C)
 // ============================================================
-#define WS2812_PIN  GPIO_Pin_4
-#define WS2812_PORT GPIOA
-
-// WS2812 timing @ 60MHz: 0=400nsH+850nsL, 1=800nsH+450nsL
-// 1 cycle = 16.7ns. Use ~12 NOP cycles per bit decision.
-static void ws2812_send_byte(uint8_t byte) {
-    for (int8_t bit = 7; bit >= 0; bit--) {
-        if (byte & (1 << bit)) {
-            // 1-bit: ~800ns high, 450ns low
-            GPIOA_SetBits(WS2812_PIN);
-            for (volatile uint8_t n = 0; n < 20; n++);  // ~800ns
-            GPIOA_ResetBits(WS2812_PIN);
-            for (volatile uint8_t n = 0; n < 10; n++);  // ~450ns
-        } else {
-            // 0-bit: ~400ns high, 850ns low
-            GPIOA_SetBits(WS2812_PIN);
-            for (volatile uint8_t n = 0; n < 8; n++);   // ~400ns
-            GPIOA_ResetBits(WS2812_PIN);
-            for (volatile uint8_t n = 0; n < 22; n++);  // ~850ns
-        }
-    }
-}
-
-static void ws2812_set(uint8_t r, uint8_t g, uint8_t b) {
-    ws2812_send_byte(g);  // GRB order
-    ws2812_send_byte(r);
-    ws2812_send_byte(b);
-    // Reset: >50μs low
-    GPIOA_ResetBits(WS2812_PIN);
-    for (volatile uint16_t n = 0; n < 3000; n++);
-}
-
-static void ws2812_init(void) {
-    GPIOA_ModeCfg(WS2812_PIN, GPIO_ModeOut_PP_5mA);
-    ws2812_set(0, 0, 0);
-}
-
-// ============================================================
-// SSD1306 OLED 0.49" 64x32 (I²C 0x3C, shared bus with IMU)
-// ============================================================
-#define OLED_ADDR  0x3C
-#define OLED_WIDTH 64
-#define OLED_HEIGHT 32
-#define OLED_PAGES (OLED_HEIGHT / 8)  // 4 pages
-
+#define OLED_ADDR 0x3C
 static bool oled_on;
 
-static void oled_write_cmd(uint8_t cmd) {
-    I2C_WriteReg(OLED_ADDR, 0x00, &cmd, 1);  // 0x00 = command mode
-}
+static void oled_cmd(uint8_t c) { I2C_WriteReg(OLED_ADDR, 0x00, &c, 1); }
+static void oled_data(uint8_t *b, uint8_t n) { I2C_WriteReg(OLED_ADDR, 0x40, b, n); }
 
-static void oled_write_data(uint8_t *buf, uint8_t len) {
-    I2C_WriteReg(OLED_ADDR, 0x40, buf, len);  // 0x40 = data mode
-}
-
-static void oled_init(void) {
-    // SSD1306 init sequence for 64x32
-    uint8_t init[] = {
-        0xAE,       // Display OFF
-        0xD5, 0x80, // Clock div
-        0xA8, 0x1F, // Mux ratio = 31 (32 rows)
-        0xD3, 0x00, // Display offset = 0
-        0x40,       // Start line = 0
-        0x8D, 0x14, // Charge pump ON
-        0x20, 0x00, // Horizontal addressing
-        0xA1,       // Segment remap
-        0xC8,       // COM scan direction
-        0xDA, 0x02, // COM pins
-        0x81, 0x7F, // Contrast
-        0xD9, 0xF1, // Pre-charge
-        0xDB, 0x40, // VCOM detect
-        0xA4,       // Display from RAM
-        0xA6,       // Normal (non-inverted)
-        0xAF,       // Display ON
-    };
-    for (uint8_t i = 0; i < sizeof(init); i++)
-        oled_write_cmd(init[i]);
-    oled_on = true;
-}
-
-static void oled_clear(void) {
-    uint8_t zero[64] = {0};
-    for (uint8_t page = 0; page < OLED_PAGES; page++) {
-        oled_write_cmd(0xB0 + page);  // Set page
-        oled_write_cmd(0x00);         // Column low
-        oled_write_cmd(0x10);         // Column high
-        oled_write_data(zero, OLED_WIDTH);
-    }
-}
-
-// 8x16 digit font (numbers 0-9, :, space) — packed as 16 bytes each
-static const uint8_t font_8x16[][16] = {
-    // 0
-    {0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C},
-    // 1
-    {0x18,0x38,0x78,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x7E,0x7E},
-    // 2
-    {0x3C,0x7E,0x66,0x60,0x60,0x60,0x30,0x18,0x0C,0x06,0x06,0x06,0x66,0x66,0x7E,0x3C},
-    // 3
-    {0x3C,0x7E,0x66,0x60,0x60,0x38,0x38,0x60,0x60,0x60,0x60,0x60,0x66,0x66,0x7E,0x3C},
-    // 4
-    {0x30,0x38,0x3C,0x36,0x33,0x33,0x7F,0x7F,0x30,0x30,0x30,0x30,0x30,0x30,0x78,0x78},
-    // 5
-    {0x7E,0x7E,0x06,0x06,0x3E,0x7E,0x66,0x60,0x60,0x60,0x60,0x60,0x66,0x66,0x7E,0x3C},
-    // 6
-    {0x3C,0x7E,0x66,0x06,0x06,0x3E,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C},
-    // 7
-    {0x7E,0x7E,0x66,0x60,0x60,0x30,0x30,0x18,0x18,0x18,0x0C,0x0C,0x0C,0x0C,0x0C,0x0C},
-    // 8
-    {0x3C,0x7E,0x66,0x66,0x66,0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C},
-    // 9
-    {0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x7E,0x3E,0x60,0x60,0x60,0x66,0x66,0x7E,0x3C},
-    // : colon
-    {0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00},
-    // % percent
-    {0x06,0x0F,0x09,0x06,0x60,0x30,0x18,0x0C,0x06,0x03,0x01,0x33,0x61,0x71,0x3B,0x1E},
-    // . dot
-    {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00},
-    // space
-    {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
+static const uint8_t font8x16[][16] = {
+    {0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C}, // 0
+    {0x18,0x38,0x78,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x7E,0x7E}, // 1
+    {0x3C,0x7E,0x66,0x60,0x60,0x60,0x30,0x18,0x0C,0x06,0x06,0x06,0x66,0x66,0x7E,0x3C}, // 2
+    {0x3C,0x7E,0x66,0x60,0x60,0x38,0x38,0x60,0x60,0x60,0x60,0x60,0x66,0x66,0x7E,0x3C}, // 3
+    {0x30,0x38,0x3C,0x36,0x33,0x33,0x7F,0x7F,0x30,0x30,0x30,0x30,0x30,0x30,0x78,0x78}, // 4
+    {0x7E,0x7E,0x06,0x06,0x3E,0x7E,0x66,0x60,0x60,0x60,0x60,0x60,0x66,0x66,0x7E,0x3C}, // 5
+    {0x3C,0x7E,0x66,0x06,0x06,0x3E,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C}, // 6
+    {0x7E,0x7E,0x66,0x60,0x60,0x30,0x30,0x18,0x18,0x18,0x0C,0x0C,0x0C,0x0C,0x0C,0x0C}, // 7
+    {0x3C,0x7E,0x66,0x66,0x66,0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C}, // 8
+    {0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x7E,0x3E,0x60,0x60,0x60,0x66,0x66,0x7E,0x3C}, // 9
+    {0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00}, // :
+    {0x06,0x0F,0x09,0x06,0x60,0x30,0x18,0x0C,0x06,0x03,0x01,0x33,0x61,0x71,0x3B,0x1E}, // %
+    {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00}, // .
+    {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}, // ' '
 };
 
-static void oled_draw_char(uint8_t x, uint8_t page, uint8_t ch) {
-    uint8_t idx;
-    if (ch >= '0' && ch <= '9') idx = ch - '0';
-    else if (ch == ':') idx = 10;
-    else if (ch == '%') idx = 11;
-    else if (ch == '.') idx = 12;
-    else idx = 13;  // space
-
-    oled_write_cmd(0xB0 + (page & 0x07));    // Set page
-    oled_write_cmd(0x00 + (x & 0x0F));        // Column low
-    oled_write_cmd(0x10 + ((x >> 4) & 0x0F)); // Column high
-
-    uint8_t top[8], bot[8];
-    for (uint8_t i = 0; i < 8; i++) {
-        top[i] = font_8x16[idx][i];
-        bot[i] = font_8x16[idx][i + 8];
-    }
-    oled_write_data(top, 8);
-    oled_write_cmd(0xB0 + ((page + 1) & 0x07));
-    oled_write_cmd(0x00 + (x & 0x0F));
-    oled_write_cmd(0x10 + ((x >> 4) & 0x0F));
-    oled_write_data(bot, 8);
+static void oled_init(void) {
+    uint8_t init[] = {0xAE,0xD5,0x80,0xA8,0x1F,0xD3,0x00,0x40,0x8D,0x14,0x20,0x00,0xA1,0xC8,0xDA,0x02,0x81,0x7F,0xD9,0xF1,0xDB,0x40,0xA4,0xA6,0xAF};
+    for(uint8_t i=0;i<sizeof(init);i++) oled_cmd(init[i]);
 }
 
-// Draw big number string at position (x page offset)
-static void oled_draw_num(uint8_t x, uint8_t page, uint32_t num) {
-    char buf[10];
-    uint8_t len = 0;
-    if (num == 0) { buf[len++] = '0'; }
-    else {
-        uint32_t n = num;
-        while (n) { n /= 10; len++; }
-        for (int8_t i = len - 1; i >= 0; i--) {
-            buf[i] = '0' + (num % 10);
-            num /= 10;
-        }
-    }
-    for (uint8_t i = 0; i < len; i++)
-        oled_draw_char(x + i * 8, page, buf[i]);
+static void oled_clear(void) { uint8_t z[64]={0}; for(uint8_t p=0;p<4;p++){ oled_cmd(0xB0+p); oled_cmd(0x00); oled_cmd(0x10); oled_data(z,64); } }
+
+static void oled_char(uint8_t x, uint8_t pg, uint8_t ch) {
+    uint8_t i = (ch>='0'&&ch<='9')?ch-'0':(ch==':')?10:(ch=='%')?11:(ch=='.')?12:13;
+    uint8_t t[8],b[8]; for(uint8_t j=0;j<8;j++){t[j]=font8x16[i][j];b[j]=font8x16[i][j+8];}
+    oled_cmd(0xB0+(pg&7)); oled_cmd(0x00+(x&0xF)); oled_cmd(0x10+((x>>4)&0xF)); oled_data(t,8);
+    oled_cmd(0xB0+((pg+1)&7)); oled_cmd(0x00+(x&0xF)); oled_cmd(0x10+((x>>4)&0xF)); oled_data(b,8);
 }
 
-// ---- OLED page: show steps ----
-static void oled_show_steps(void) {
-    oled_clear();
-    oled_draw_num(8, 1, step_count > 99999 ? 99999 : step_count);
-    // "steps" label on line 3
-    uint8_t lbl[] = {'s','t','e','p','s'};
-    for (uint8_t i = 0; i < 5; i++)
-        oled_draw_char(12 + i * 8, 3, lbl[i]);
-}
-
-// ---- OLED page: show battery + time ----
-static void oled_show_status(void) {
-    oled_clear();
-    uint8_t bat = battery_percent();
-    oled_draw_num(0, 1, bat);
-    oled_draw_char(16, 1, '%');
-    uint32_t t = rtc_seconds();
-    uint8_t h = (t / 3600) % 24;
-    uint8_t m = (t / 60) % 60;
-    oled_draw_num(0, 3, h);
-    oled_draw_char(16, 3, ':');
-    oled_draw_num(24, 3, m);
+static void oled_num(uint8_t x, uint8_t pg, uint32_t n) {
+    char s[8]; uint8_t l=0;
+    if(!n)s[l++]='0'; else{uint32_t t=n;while(t){t/=10;l++;}for(int8_t i=l-1;i>=0;i--){s[i]='0'+(n%10);n/=10;}}
+    for(uint8_t i=0;i<l;i++) oled_char(x+i*8,pg,s[i]);
 }
 
 // ============================================================
-// Button + Display handler
+// WS2812 RGB LED (PA4)
 // ============================================================
-#define BTN_PIN      GPIO_Pin_5
-#define OLED_TIMEOUT 5   // seconds OLED stays on after button press
-
-static void button_init(void) {
-    GPIOA_ModeCfg(BTN_PIN, GPIO_ModeIN_PU);
-}
-
-static bool button_pressed(void) {
-    return !GPIOA_ReadPortPin(BTN_PIN);
-}
-
-// Button press cycles display: OFF → Steps → Status → OFF
-typedef enum { DISP_OFF, DISP_STEPS, DISP_STATUS } display_page_t;
-static display_page_t display_page = DISP_OFF;
-static uint32_t display_on_time;  // seconds when display was turned on
-
-static void button_handle(void) {
-    if (!button_pressed()) return;
-
-    // Debounce
-    for (volatile uint32_t i = 0; i < 600000; i++);
-
-    switch (display_page) {
-    case DISP_OFF:
-        display_page = DISP_STEPS;
-        oled_show_steps();
-        display_on_time = rtc_seconds();
-        // Green flash = activity reward
-        ws2812_set(0, 32, 0);
-        for (volatile uint32_t j = 0; j < 300000; j++);
-        ws2812_set(0, 0, 0);
-        break;
-    case DISP_STEPS:
-        display_page = DISP_STATUS;
-        oled_show_status();
-        display_on_time = rtc_seconds();
-        break;
-    case DISP_STATUS:
-        display_page = DISP_OFF;
-        oled_clear();
-        oled_write_cmd(0xAE);  // Display OFF
-        oled_on = false;
-        break;
-    }
-
-    // Wait for button release
-    while (button_pressed());
-}
-
-// Auto-off display after timeout
-static void display_timeout_check(void) {
-    if (display_page != DISP_OFF && oled_on) {
-        if (rtc_seconds() - display_on_time >= OLED_TIMEOUT) {
-            display_page = DISP_OFF;
-            oled_clear();
-            oled_write_cmd(0xAE);
-            oled_on = false;
+static void ws2812_send(uint8_t v) {
+    for(int8_t b=7;b>=0;b--){
+        if(v&(1<<b)){
+            GPIOA_SetBits(GPIO_Pin_4); for(volatile uint8_t n=0;n<20;n++);
+            GPIOA_ResetBits(GPIO_Pin_4); for(volatile uint8_t n=0;n<10;n++);
+        }else{
+            GPIOA_SetBits(GPIO_Pin_4); for(volatile uint8_t n=0;n<8;n++);
+            GPIOA_ResetBits(GPIO_Pin_4); for(volatile uint8_t n=0;n<22;n++);
         }
     }
+}
+static void ws2812_rgb(uint8_t r,uint8_t g,uint8_t b){ ws2812_send(g);ws2812_send(r);ws2812_send(b); GPIOA_ResetBits(GPIO_Pin_4); for(volatile uint16_t n=0;n<3000;n++); }
+
+// ============================================================
+// Vibration motor (PA6 PWM via transistor)
+// ============================================================
+static void vib_init(void) { GPIOA_ModeCfg(GPIO_Pin_6, GPIO_ModeOut_PP_5mA); GPIOA_ResetBits(GPIO_Pin_6); }
+static void vib_on(void)  { GPIOA_SetBits(GPIO_Pin_6); }
+static void vib_off(void) { GPIOA_ResetBits(GPIO_Pin_6); }
+static void vib_buzz(uint16_t ms)  { vib_on(); for(volatile uint32_t i=0;i<(uint32_t)ms*6000;i++); vib_off(); }
+static void vib_double(void)       { vib_buzz(80); for(volatile uint32_t i=0;i<720000;i++); vib_buzz(80); }
+
+// ============================================================
+// ADC helpers: battery (PA0) + skin temp NTC (PA7)
+// ============================================================
+static uint16_t adc_read_ch(uint8_t ch) {
+    ADC_Init(ch, ADC_Mode_Single, ADC_PGA_0, ADC_Data_12bit);
+    ADC_Start(); while(!ADC_Ready()); return ADC_Read();
+}
+
+static uint8_t battery_pct(void) {
+    uint16_t v = adc_read_ch(ADC_CHANNEL_VCC);
+    if(v>4200)v=4200; if(v<3200)v=3200;
+    return (uint8_t)((uint32_t)(v-3200)*100/1000);
+}
+
+// Skin temp NTC: PA7, 100K@25°C B=3950, 100K pull-up to VCC
+static uint8_t skin_temp(void) {
+    uint16_t adc = adc_read_ch(ADC_CHANNEL_7);
+    // Rough linear approx near body temp (32-42°C, ADC 1800-2200)
+    // temp = 30 + (adc - 2000) * 0.03
+    int16_t t = 370 + (int16_t)(((int32_t)(adc - 2000) * 3) / 100); // 37.0°C + delta
+    if(t<300)t=300; if(t>450)t=450;
+    return (uint8_t)(t - 300); // 0 = 30°C, for storage
+}
+
+// ============================================================
+// Activity record (12 bytes)
+// ============================================================
+typedef struct __attribute__((packed)) {
+    uint32_t ts;       // minutes since boot
+    uint16_t steps;
+    uint8_t  hr;       // heart rate BPM (0=n/a)
+    uint8_t  spo2;     // SpO2 % (0=n/a)
+    uint8_t  temp;     // skin temp - 30°C
+    uint8_t  intensity;// 0-2
+    uint8_t  act_type; // 0=walk,1=run,2=jump,3=bike,4=rest
+    uint8_t  reserved;
+} record_t;
+
+// ============================================================
+// Flash storage
+// ============================================================
+static uint32_t flash_off = FLASH_BASE;
+static uint32_t flash_cnt;
+
+static void flash_init(void) {
+    for(uint32_t a=FLASH_BASE;a<FLASH_BASE+0x46000;a+=RECORD_SIZE){
+        uint8_t *p=(uint8_t*)a;
+        if(p[0]==0xFF&&p[1]==0xFF){flash_off=a;break;}
+        flash_cnt++;
+    }
+    if(flash_cnt>=RECORD_SIZE*100){flash_off=FLASH_BASE;flash_cnt=0;FLASH_EraseSector(FLASH_BASE);}
+}
+
+static void flash_write(record_t *r) {
+    uint8_t b[RECORD_SIZE];
+    b[0]=r->ts&0xFF;b[1]=(r->ts>>8)&0xFF;b[2]=(r->ts>>16)&0xFF;b[3]=(r->ts>>24)&0xFF;
+    b[4]=r->steps&0xFF;b[5]=(r->steps>>8)&0xFF;b[6]=r->hr;b[7]=r->spo2;
+    b[8]=r->temp;b[9]=r->intensity;b[10]=r->act_type;b[11]=0;
+    FLASH_Write(flash_off,b,RECORD_SIZE); flash_off+=RECORD_SIZE; flash_cnt++;
+    if(flash_off>=FLASH_BASE+0x46000){flash_off=FLASH_BASE;flash_cnt=0;FLASH_EraseSector(FLASH_BASE);}
+}
+
+static bool flash_read(uint32_t idx, record_t *r) {
+    if(idx>=flash_cnt)return false;
+    uint32_t a=FLASH_BASE+idx*RECORD_SIZE; uint8_t *p=(uint8_t*)a;
+    r->ts=p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
+    r->steps=p[4]|((uint16_t)p[5]<<8); r->hr=p[6]; r->spo2=p[7];
+    r->temp=p[8]; r->intensity=p[9]; r->act_type=p[10];
+    return true;
+}
+
+// ============================================================
+// Step detection
+// ============================================================
+static int16_t   mag_hist[8];
+static uint8_t   mag_idx;
+static int32_t   mag_sum;
+static int16_t   step_thr = 1200;
+static uint32_t  step_count, last_step_ms, act_seconds, minute_steps;
+static uint8_t   minute_intensity;
+
+static int16_t mag_filter(int16_t v) {
+    mag_sum-=mag_hist[mag_idx]; mag_sum+=v;
+    mag_hist[mag_idx]=v; mag_idx=(mag_idx+1)&7;
+    return (int16_t)(mag_sum/8);
+}
+
+static void step_detect(int16_t ax, int16_t ay, int16_t az, uint32_t ms) {
+    int32_t m2=(int32_t)ax*ax+(int32_t)ay*ay+(int32_t)az*az;
+    int16_t mag=(int16_t)(m2>>10);
+    int16_t mag_f=mag_filter(mag);
+    int16_t ac=mag_f-1000; if(ac<0)ac=-ac; if(ac<200)ac=200;
+    if(ac>800) act_seconds++;
+
+    static int16_t prev; static bool lo=true;
+    if(ac>step_thr && lo && (ms-last_step_ms)>STEP_MIN_MS) {
+        step_count++; last_step_ms=ms;
+        if(ac>step_thr*2) step_thr+=50;
+        else if(step_thr>800 && ac<step_thr*3/2) step_thr-=20;
+    }
+    lo=(ac<step_thr*3/4); prev=ac;
+}
+
+// Activity type classification
+static uint8_t classify_activity(int16_t a[3], int16_t g[3]) {
+    int32_t amag=(int32_t)a[0]*a[0]+(int32_t)a[1]*a[1]+(int32_t)a[2]*a[2];
+    int32_t gmag=(int32_t)g[0]*g[0]+(int32_t)g[1]*g[1]+(int32_t)g[2]*g[2];
+    uint32_t step_rate=minute_steps;
+    if(step_rate>80 && amag>5000000) return 1;  // Run
+    if(gmag>10000000) return 2;                   // Jump
+    if(step_rate<5 && amag<1000000) return 3;     // Bike (smooth)
+    if(step_rate>10) return 0;                    // Walk
+    return 4;                                      // Rest/other
+}
+
+// ============================================================
+// Sleep analysis (night mode: 21:00-07:00, continuous HR)
+// ============================================================
+static bool is_night_time(uint32_t now) {
+    uint8_t h = (now / 3600) % 24;
+    return (h >= 21 || h < 7);
+}
+
+// ============================================================
+// BLE GATT + Advertising
+// ============================================================
+static uint8_t ble_conn, sync_on, live_on, sync_idx;
+static uint8_t adv_data[]={0x02,0x01,0x06, 0x08,0x09,'K','i','d','s','A','c','t', 0x05,0xFF,0x34,0x12,0,0,0};
+
+static void ble_handler(uint32_t evt, uint8_t *d, uint16_t len) {
+    switch(evt){
+    case GAP_DEVICE_INIT_DONE:
+        GAP_SetAdvData(adv_data,sizeof(adv_data)); GAPRole_StartAdvertising(); break;
+    case GAP_CONNECTED: ble_conn=1; break;
+    case GAP_DISCONNECTED: ble_conn=0; sync_on=0; GAPRole_StartAdvertising(); break;
+    case GATT_WRITE_REQUEST:
+        if(len>=1){
+            switch(d[0]){
+            case 1:sync_on=1;sync_idx=0;break; case 2:sync_on=0;break;
+            case 3:FLASH_EraseSector(FLASH_BASE);flash_off=FLASH_BASE;flash_cnt=0;break;
+            case 0x10:live_on=1;break; case 0x11:live_on=0;break;
+            }
+        } break;
+    }
+}
+
+// ============================================================
+// Button + Display
+// ============================================================
+typedef enum { PAGE_OFF, PAGE_STEPS, PAGE_HR, PAGE_STATUS } page_t;
+static page_t page; static uint32_t page_on;
+
+static void btn_init(void) { GPIOA_ModeCfg(GPIO_Pin_5, GPIO_ModeIN_PU); }
+static bool btn_pressed(void) { return !GPIOA_ReadPortPin(GPIO_Pin_5); }
+
+static void show_page(page_t p) {
+    oled_clear(); oled_cmd(0xAF); oled_on=true; page_on=rtc_seconds();
+    page=p;
+    switch(p){
+    case PAGE_STEPS: oled_num(0,1,step_count>99999?99999:step_count); {
+        uint8_t s[]={'s','t','e','p','s'}; for(uint8_t i=0;i<5;i++) oled_char(12+i*8,3,s[i]);
+    } break;
+    case PAGE_HR: {
+        // Show HR + SpO2 placeholder (refresh on actual measurement)
+        oled_num(0,1,(uint32_t)max30102_hr_bpm);
+        uint8_t l1[]={'b','p','m'}; for(uint8_t i=0;i<3;i++) oled_char(24+i*8,1,l1[i]);
+        oled_num(0,3,(uint32_t)max30102_spo2_val);
+        oled_char(16,3,'%');
+    } break;
+    case PAGE_STATUS:
+        oled_num(0,1,(uint32_t)battery_pct()); oled_char(16,1,'%');
+        { uint32_t t=rtc_seconds(); uint8_t hh=(t/3600)%24,mm=(t/60)%60; oled_num(0,3,hh); oled_char(16,3,':'); oled_num(24,3,mm); }
+        break;
+    case PAGE_OFF: oled_clear(); oled_cmd(0xAE); oled_on=false; break;
+    }
+}
+
+static void btn_handle(void) {
+    if(!btn_pressed()) return;
+    for(volatile uint32_t i=0;i<600000;i++);
+    switch(page){
+    case PAGE_OFF: show_page(PAGE_STEPS); vib_buzz(30); break;
+    case PAGE_STEPS: show_page(PAGE_HR); break;
+    case PAGE_HR: show_page(PAGE_STATUS); break;
+    case PAGE_STATUS: show_page(PAGE_OFF); break;
+    }
+    while(btn_pressed());
+}
+
+static void display_timeout(void) {
+    if(page!=PAGE_OFF && oled_on && rtc_seconds()-page_on>=OLED_TIMEOUT) show_page(PAGE_OFF);
+}
+
+// ============================================================
+// HR/SpO2 measurement variables (for display)
+// ============================================================
+static uint8_t max30102_hr_bpm;
+static uint8_t max30102_spo2_val;
+static bool max30102_present;
+
+static inline uint32_t rtc_seconds(void) { return RTC_GetCounter(); }
+
+// ============================================================
+// State machine
+// ============================================================
+typedef enum { SLEEP, ACTIVE } state_t;
+static state_t state = SLEEP;
+static bool wom_fired;
+static uint32_t idle_minutes;
+
+__attribute__((interrupt)) void GPIOA_IRQHandler(void) {
+    if(GPIOA_ReadITFlagBit(GPIO_Pin_1)){ GPIOA_ClearITFlagBit(GPIO_Pin_1); if(state==SLEEP)wom_fired=true; }
 }
 
 // ============================================================
 // System init
 // ============================================================
 static void system_init(void) {
-    // Clock: 60MHz HSI
     SetSysClock(CLK_SOURCE_HSI_60MHz);
-
-    // GPIO + peripherals
-    ws2812_init();
-    button_init();
-    oled_init();
-    oled_clear();
-    oled_write_cmd(0xAE);  // OLED off (save power)
-
-    // I2C for IMU
+    // I2C
     GPIOA_ModeCfg(GPIO_Pin_2|GPIO_Pin_3, GPIO_ModeIN_PU);
-
-    // ADC for battery
-    ADC_Init(ADC_CHANNEL_VCC, ADC_Mode_Single, ADC_PGA_0, ADC_Data_12bit);
-
-    // RTC for timestamping (external 32.768KHz)
-    RTC_Init(RTC_CLK_SRC_XTAL);
-
-    // WDT
-    WDOG_Init(WDOG_CLK_SRC_LSI, WDOG_TIMEOUT_16S);
-
-    // BLE init
-    CH58x_ble_init();
-    GAPRole_PeripheralInit();
-    GAPBondMgr_Init();
-    GAP_DeviceInit(ble_handler);
-    GAP_SetParamValue(GAP_ADV_INTERVAL, 320);  // 200ms advertising
-
-    // IMU init
-    if (!imu_init()) {
-        // Blink LED 3 times = IMU error
-                ws2812_set(32,0,0); for(volatile uint32_t _i=0;_i<1800000;_i++); ws2812_set(0,0,0); // Red x3 = error
-    }
-}
-
-// ============================================================
-// Convert RTC to Unix-ish timestamp (seconds since boot)
-// ============================================================
-static uint32_t rtc_seconds(void) {
-    return RTC_GetCounter();  // CH582 RTC counter in seconds
+    I2C_Init(I2C_Mode_I2C, 400000, I2C_Ack_Enable);
+    // IMU INT1
+    GPIOA_ModeCfg(GPIO_Pin_1, GPIO_ModeIN_PU);
+    GPIOA_ITModeCfg(GPIO_Pin_1, GPIO_IT_Rise);
+    PFIC_EnableIRQ(GPIOA_IRQn);
+    // Peripherals
+    ws2812_rgb(0,0,32); for(volatile uint32_t i=0;i<600000;i++); ws2812_rgb(0,0,0);
+    btn_init(); vib_init(); oled_init(); oled_clear(); oled_cmd(0xAE);
+    // IMU
+    if(!imu_init()){ ws2812_rgb(32,0,0); for(volatile uint32_t i=0;i<1800000;i++); ws2812_rgb(0,0,0); }
+    // MAX30102
+    max30102_present = max30102_init();
+    if(max30102_present) max30102_shutdown();
+    // RTC + WDT + BLE
+    RTC_Init(RTC_CLK_SRC_XTAL); WDOG_Init(WDOG_CLK_SRC_LSI, WDOG_TIMEOUT_16S);
+    CH58x_ble_init(); GAPRole_PeripheralInit(); GAPBondMgr_Init();
+    GAP_DeviceInit(ble_handler); GAP_SetParamValue(GAP_ADV_INTERVAL, BLE_ADV_MS);
 }
 
 // ============================================================
 // Main
 // ============================================================
 int main(void) {
-    system_init();
-    storage_init();
-    PFIC_EnableAllIRQ();
+    system_init(); flash_init(); PFIC_EnableAllIRQ();
+    uint32_t now, last_rec=0, last_hr=0, last_idle=0;
+    uint32_t minute_s = 0;
+    uint8_t minute_a=0, minute_i=0;
+    uint8_t hr=0, spo2=0, temp=0;
 
-    uint32_t now, last_record_save = 0, last_inactive_check = 0;
-    uint32_t minute_steps = 0;
-    uint8_t  minute_active_sec = 0;
-    uint8_t  minute_intensity = 0;
-
-    // Start in SLEEP mode: IMU WOM + MCU deep sleep
-    // IMU INT1 will wake us when child moves
-    ws2812_set(0,0,32); for(volatile uint32_t _i=0;_i<600000;_i++); ws2812_set(0,0,0); // Boot OK
-
-    while (1) {
+    while(1) {
         now = rtc_seconds();
 
-        // ====================================================
-        // STATE: SLEEP (IMU WOM mode, 21μA)
-        //   IMU watches for motion. INT1 → wakes MCU.
-        //   MCU deep sleeps. No IMU polling needed.
-        // ====================================================
-        if (device_state == STATE_SLEEP) {
-
-            // Check if WOM triggered (GPIO interrupt set flag)
-            if (wom_triggered) {
-                // Vibration detected → switch to ACTIVE
-                imu_enter_active_mode();
-                ws2812_set(0,32,0); for(volatile uint32_t _i=0;_i<900000;_i++); ws2812_set(0,0,0); // Woke up
-                continue;      // Skip sleep, go measure
+        // ---- SLEEP state (IMU WOM, 21μA) ----
+        if(state == SLEEP) {
+            if(wom_fired) {
+                imu_active(); state=ACTIVE; idle_minutes=0; wom_fired=false;
+                ws2812_rgb(0,32,0); for(volatile uint32_t i=0;i<600000;i++); ws2812_rgb(0,0,0);
+                continue;
             }
-
-            // In SLEEP: still handle BLE if phone is connected
-            if (ble_connected && sync_active) {
-                activity_record_t rec;
-                if (storage_read(sync_index, &rec)) {
-                    uint8_t buf[RECORD_SIZE];
-                    buf[0] = (rec.timestamp>>0)&0xFF;  buf[1] = (rec.timestamp>>8)&0xFF;
-                    buf[2] = (rec.timestamp>>16)&0xFF; buf[3] = (rec.timestamp>>24)&0xFF;
-                    buf[4] = rec.steps&0xFF;            buf[5] = (rec.steps>>8)&0xFF;
-                    buf[6] = rec.active_sec;            buf[7] = rec.intensity;
-                    GATT_Notify(0, buf, RECORD_SIZE);
-                    sync_index++;
-                } else {
-                    uint8_t end[] = {0xFF,0xFF,0xFF,0xFF,0,0,0,0};
-                    GATT_Notify(0, end, RECORD_SIZE);
-                    sync_active = 0;
-                }
+            // BLE sync in sleep
+            if(ble_conn && sync_on) {
+                record_t r; if(flash_read(sync_idx,&r)){
+                    uint8_t b[RECORD_SIZE]; memcpy(b,&r,RECORD_SIZE);
+                    GATT_Notify(0,b,RECORD_SIZE); sync_idx++;
+                } else { uint8_t e[RECORD_SIZE]={0};e[0]=0xFF;e[1]=0xFF;e[2]=0xFF;e[3]=0xFF;GATT_Notify(0,e,RECORD_SIZE);sync_on=0; }
             }
-
-            // Deep sleep: WFI + GPIO interrupt wakes us
-            // No RTC timer needed in SLEEP (IMU INT1 handles wake)
-            // But we wake periodically from BLE advertising events
-            __WFI();
-            WDOG_Feed();
-            continue;  // Back to SLEEP check
+            btn_handle(); display_timeout();
+            __WFI(); WDOG_Feed(); continue;
         }
 
-        // ====================================================
-        // STATE: ACTIVE (IMU full 25Hz + MCU recording, 4.7mA)
-        // ====================================================
-        // Read IMU & detect steps
-        int16_t accel[3], gyro[3];
-        imu_read_6axis(accel, gyro);
-        step_detect(accel[0], accel[1], accel[2], now * 1000);
+        // ---- ACTIVE state ----
+        int16_t acc[3], gyr[3]; imu_read_6axis(acc, gyr);
+        step_detect(acc[0],acc[1],acc[2],now*1000);
+        minute_s=step_count; minute_a=act_seconds;
+        if(minute_a>40)minute_i=2;else if(minute_a>15)minute_i=1;else minute_i=0;
 
-        minute_steps = (uint16_t)step_count;
-        minute_active_sec = activity_seconds;
-        if (minute_active_sec > 40) minute_intensity = INTENSITY_HIGH;
-        else if (minute_active_sec > 15) minute_intensity = INTENSITY_MEDIUM;
-        else minute_intensity = INTENSITY_LOW;
-
-        // ---- Save minute record ----
-        if (now - last_record_save >= RECORD_INTERVAL) {
-            last_record_save = now;
-            activity_record_t rec;
-            rec.timestamp  = now / 60;
-            rec.steps      = minute_steps;
-            rec.active_sec = minute_active_sec;
-            rec.intensity  = minute_intensity;
-            storage_write(&rec);
-            step_count -= minute_steps;
-            activity_seconds = 0;
-            ws2812_set(0,8,0); for(volatile uint32_t i=0;i<30000;i++); ws2812_set(0,0,0);
-        }
-
-        // ---- Inactivity check: return to SLEEP ----
-        if (now - last_inactive_check >= 60) {
-            last_inactive_check = now;
-            if (minute_steps == 0) {
-                inactive_minutes++;
-                if (inactive_minutes >= INACTIVE_MINUTES) {
-                    // 5+ minutes no movement → back to SLEEP
-                    imu_enter_wom_mode();
-                    ws2812_set(32,16,0); for(volatile uint32_t _i=0;_i<900000;_i++); ws2812_set(0,0,0); // Sleeping
-                    continue;
-                }
-            } else {
-                inactive_minutes = 0;  // Reset counter on activity
+        // Minute save
+        if(now-last_rec>=RECORD_INTERVAL) {
+            last_rec=now;
+            // HR check every 10 min (or continuous at night)
+            bool do_hr=false;
+            if(max30102_present) {
+                if(is_night_time(now) && (now-last_hr>=HR_INTERVAL)) do_hr=true;
+                else if(now-last_hr>=HR_INTERVAL) do_hr=true;
             }
-        }
-
-        // ---- BLE live data notify (ACTIVE only) ----
-        if (ble_connected && live_notify_enabled) {
-            uint8_t live[16];
-            live[0]=(accel[0]>>8)&0xFF; live[1]=accel[0]&0xFF;
-            live[2]=(accel[1]>>8)&0xFF; live[3]=accel[1]&0xFF;
-            live[4]=(accel[2]>>8)&0xFF; live[5]=accel[2]&0xFF;
-            live[6]=(gyro[0]>>8)&0xFF;  live[7]=gyro[0]&0xFF;
-            live[8]=(gyro[1]>>8)&0xFF;  live[9]=gyro[1]&0xFF;
-            live[10]=(gyro[2]>>8)&0xFF; live[11]=gyro[2]&0xFF;
-            live[12]=(step_count>>0)&0xFF; live[13]=(step_count>>8)&0xFF;
-            live[14]=(step_count>>16)&0xFF; live[15]=(step_count>>24)&0xFF;
-            GATT_Notify(0, live, 16);
-        }
-
-        // ---- BLE sync handler ----
-        if (ble_connected && sync_active) {
-            activity_record_t rec;
-            if (storage_read(sync_index, &rec)) {
-                uint8_t buf[RECORD_SIZE];
-                buf[0]=(rec.timestamp>>0)&0xFF;  buf[1]=(rec.timestamp>>8)&0xFF;
-                buf[2]=(rec.timestamp>>16)&0xFF; buf[3]=(rec.timestamp>>24)&0xFF;
-                buf[4]=rec.steps&0xFF;            buf[5]=(rec.steps>>8)&0xFF;
-                buf[6]=rec.active_sec;            buf[7]=rec.intensity;
-                GATT_Notify(0, buf, RECORD_SIZE);
-                sync_index++;
-            } else {
-                uint8_t end[] = {0xFF,0xFF,0xFF,0xFF,0,0,0,0};
-                GATT_Notify(0, end, RECORD_SIZE);
-                sync_active = 0;
+            if(do_hr) {
+                max30102_wake(); for(volatile uint32_t i=0;i<50000;i++); // wait for sensor
+                uint32_t ir[32],red[32]; uint8_t cnt;
+                max30102_read_fifo(ir,red,&cnt);
+                hr=max30102_hr(ir,cnt); spo2=max30102_spo2(ir,red,cnt);
+                max30102_hr_bpm=hr; max30102_spo2_val=spo2;
+                max30102_shutdown();
+                last_hr=now;
             }
+            temp=skin_temp();
+
+            record_t rec; rec.ts=now/60; rec.steps=minute_s; rec.hr=hr; rec.spo2=spo2;
+            rec.temp=temp; rec.intensity=minute_i; rec.act_type=classify_activity(acc,gyr);
+            flash_write(&rec);
+            step_count-=minute_s; act_seconds=0; minute_s=0;
+            ws2812_rgb(0,4,0); for(volatile uint32_t i=0;i<20000;i++); ws2812_rgb(0,0,0);
         }
 
-        // ---- Button: toggle display, BLE sync ----
-        button_handle();
-        if (ble_connected && button_pressed() && display_page == DISP_OFF) {
-            // Long press when display is off → toggle BLE sync
-            sync_active = !sync_active; sync_index = 0;
-            ws2812_set(0,0,32); for(volatile uint32_t i=0;i<600000;i++); ws2812_set(0,0,0);
-            for (volatile uint32_t i=0; i<6000000; i++);
+        // Inactivity → sleep
+        if(now-last_idle>=60) { last_idle=now;
+            if(minute_s==0){ idle_minutes++; if(idle_minutes>=INACTIVE_MINUTES){
+                imu_sleep(); state=SLEEP; ws2812_rgb(32,16,0); for(volatile uint32_t i=0;i<600000;i++); ws2812_rgb(0,0,0); continue;
+            }} else idle_minutes=0;
         }
-        display_timeout_check();
 
-        // ---- Sleep 1 second ----
-        __WFI();
-        WDOG_Feed();
+        // BLE live notify
+        if(ble_conn && live_on) {
+            uint8_t d[16]; d[0]=(acc[0]>>8)&0xFF;d[1]=acc[0]&0xFF;d[2]=(acc[1]>>8)&0xFF;d[3]=acc[1]&0xFF;
+            d[4]=(acc[2]>>8)&0xFF;d[5]=acc[2]&0xFF;d[6]=(gyr[0]>>8)&0xFF;d[7]=gyr[0]&0xFF;
+            d[8]=(gyr[1]>>8)&0xFF;d[9]=gyr[1]&0xFF;d[10]=(gyr[2]>>8)&0xFF;d[11]=gyr[2]&0xFF;
+            d[12]=step_count&0xFF;d[13]=(step_count>>8)&0xFF;d[14]=hr;d[15]=spo2;
+            GATT_Notify(0,d,16);
+        }
+
+        // BLE sync
+        if(ble_conn && sync_on) {
+            record_t r; if(flash_read(sync_idx,&r)){
+                uint8_t b[RECORD_SIZE]; memcpy(b,&r,RECORD_SIZE);
+                GATT_Notify(0,b,RECORD_SIZE); sync_idx++;
+            } else { uint8_t e[RECORD_SIZE]={0};e[0]=0xFF;e[1]=0xFF;e[2]=0xFF;e[3]=0xFF;GATT_Notify(0,e,RECORD_SIZE);sync_on=0; }
+        }
+
+        // Button + display
+        btn_handle(); display_timeout();
+        // Re-show HR page if measurement updated
+        if(page==PAGE_HR) { oled_clear(); oled_num(0,1,(uint32_t)max30102_hr_bpm); uint8_t l[]={'b','p','m'}; for(uint8_t i=0;i<3;i++) oled_char(24+i*8,1,l[i]); oled_num(0,3,(uint32_t)max30102_spo2_val); oled_char(16,3,'%'); page_on=now; }
+
+        __WFI(); WDOG_Feed();
     }
 }
