@@ -16,6 +16,8 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_crt_bundle.h"
 #include "esp_timer.h"
+#include "onewire_bus.h"
+#include "ds18b20.h"
 #include "cJSON.h"
 
 #include "esp_http_client.h"
@@ -39,6 +41,8 @@ static const char *TAG = "GREENY";
 #define TEMP_CHANNEL        ADC_CHANNEL_4   // GPIO32
 #define RELAY_PINS          { GPIO_NUM_26, GPIO_NUM_27, GPIO_NUM_25, GPIO_NUM_33 }
 #define RELAY_COUNT         4
+#define ONEWIRE_GPIO1       GPIO_NUM_13
+#define ONEWIRE_GPIO2       GPIO_NUM_14
 
 // ===== WiFi =====
 #define WIFI_CONNECTED_BIT  BIT0
@@ -51,7 +55,10 @@ static adc_oneshot_unit_handle_t s_adc1_handle = NULL;
 static adc_cali_handle_t s_adc_cali = NULL;
 
 // ===== 感測器讀數 =====
-static float s_ph = 0, s_ec = 0, s_water_temp = 0, s_water_level = 0;
+static float s_ph = 0, s_ec = 0, s_water_level = 0;
+static float s_temp1 = 0, s_temp2 = 0;
+static onewire_bus_handle_t s_ow_bus1 = NULL, s_ow_bus2 = NULL;
+static ds18b20_device_handle_t s_ds1 = NULL, s_ds2 = NULL;
 static int s_relay[RELAY_COUNT] = {0};
 #ifndef CONFIG_USE_WEBSOCKET
 static bool s_http_ok = false;
@@ -227,13 +234,14 @@ static void oled_update_display(void)
     oled_write_line(0, line);
     snprintf(line, sizeof(line), "pH:%04.1f EC:%04.0f", s_ph, s_ec);
     oled_write_line(1, line);
-    snprintf(line, sizeof(line), "WT:%05.1f C WL:%02.0f%%", s_water_temp, s_water_level);
+    snprintf(line, sizeof(line), "T1:%05.1f T2:%05.1f C", s_temp1, s_temp2);
     oled_write_line(2, line);
     snprintf(line, sizeof(line), "R:%d%d%d%d",
              s_relay[0] ? 1 : 0, s_relay[1] ? 1 : 0,
              s_relay[2] ? 1 : 0, s_relay[3] ? 1 : 0);
     oled_write_line(3, line);
-    oled_write_line(4, "");
+    snprintf(line, sizeof(line), "pHcal:%.2f", s_ph_cal);
+    oled_write_line(4, line);
 #ifdef CONFIG_USE_WEBSOCKET
     snprintf(line, sizeof(line), "WiFi:%s WSS:%s",
              s_wifi_connected ? "OK" : "--", s_ws_connected ? "OK" : "--");
@@ -274,15 +282,68 @@ static uint32_t adc_read_mv(adc_channel_t ch)
     return (uint32_t)mv;
 }
 
-static float read_ph(void) { return (float)adc_read_mv(PH_CHANNEL) / 330.0f * 14.0f; }
+static float s_ph_cal = 21.34f;  // 預設值，可透過 menuconfig 或 relay_cmd 調整
+
+static float read_ph(void)
+{
+    int samples[6];
+    for (int i = 0; i < 6; i++) samples[i] = adc_read_raw(PH_CHANNEL);
+    for (int i = 0; i < 5; i++)
+        for (int j = i + 1; j < 6; j++)
+            if (samples[i] > samples[j]) { int t = samples[i]; samples[i] = samples[j]; samples[j] = t; }
+    int sum = 0;
+    for (int i = 1; i < 5; i++) sum += samples[i];
+    float volt = (float)sum / 4.0f * 3.3f / 4095.0f;
+    // Nernst 溫度修正：斜率 = -5.70 * (T°C + 273.15) / 298.15
+    float T = (s_temp1 > 0) ? s_temp1 : 25.0f;
+    float slope = -5.70f * (T + 273.15f) / 298.15f;
+    return slope * volt + s_ph_cal;
+}
 static float read_ec(void) { return (float)adc_read_mv(EC_CHANNEL); }
-static float read_water_temp(void) { return 25.0f; }
 static float read_water_level(void) { return 85.0f; }
+
+static void ds18b20_init_one(onewire_bus_handle_t *bus, ds18b20_device_handle_t *ds, gpio_num_t gpio)
+{
+    onewire_bus_rmt_config_t rmt = { .max_rx_bytes = 10 };
+    onewire_bus_config_t cfg = { .bus_gpio_num = gpio };
+    if (onewire_new_bus_rmt(&cfg, &rmt, bus) != ESP_OK) {
+        ESP_LOGW(TAG, "1-Wire GPIO%d init failed", gpio);
+        return;
+    }
+    ds18b20_config_t ds_cfg = {};
+    // Assume single device per bus
+    if (ds18b20_new_device_from_bus(*bus, &ds_cfg, ds) == ESP_OK) {
+        onewire_device_address_t addr;
+        ds18b20_get_device_address(*ds, &addr);
+        ESP_LOGI(TAG, "DS18B20 GPIO%d addr=%016llX", gpio, addr);
+    } else {
+        ESP_LOGW(TAG, "DS18B20 not found on GPIO%d", gpio);
+    }
+}
+
+static void ds18b20_init(void)
+{
+    ds18b20_init_one(&s_ow_bus1, &s_ds1, ONEWIRE_GPIO1);
+    ds18b20_init_one(&s_ow_bus2, &s_ds2, ONEWIRE_GPIO2);
+}
+
+static void read_temp_sensors(void)
+{
+    if (s_ds1) {
+        ds18b20_trigger_temperature_conversion(s_ds1);
+        ds18b20_get_temperature(s_ds1, &s_temp1);
+    }
+    if (s_ds2) {
+        ds18b20_trigger_temperature_conversion(s_ds2);
+        ds18b20_get_temperature(s_ds2, &s_temp2);
+    }
+}
 
 static void read_all_sensors(void)
 {
     s_ph = read_ph(); s_ec = read_ec();
-    s_water_temp = read_water_temp(); s_water_level = read_water_level();
+    s_water_level = read_water_level();
+    read_temp_sensors();
 }
 
 // ============================================================
@@ -306,6 +367,7 @@ static void set_relay(int idx, int val)
     if (idx >= 0 && idx < RELAY_COUNT && val >= 0) {
         s_relay[idx] = val;
         gpio_set_level(RELAY_GPIOS[idx], val);
+        ESP_LOGI(TAG, "Relay%d (GPIO%d) = %d", idx + 1, RELAY_GPIOS[idx], val);
     }
 }
 
@@ -319,7 +381,7 @@ static char *build_telemetry_ws_json(void)
     cJSON_AddStringToObject(r, "type", "telemetry");
     cJSON_AddStringToObject(r, "device_id", CONFIG_DEVICE_ID);
     cJSON_AddNumberToObject(r, "ph", s_ph); cJSON_AddNumberToObject(r, "ec", s_ec);
-    cJSON_AddNumberToObject(r, "water_temp", s_water_temp); cJSON_AddNumberToObject(r, "water_level", s_water_level);
+    cJSON_AddNumberToObject(r, "water_temp", s_temp1); cJSON_AddNumberToObject(r, "water_temp2", s_temp2); cJSON_AddNumberToObject(r, "water_level", s_water_level);
     for (int i = 0; i < RELAY_COUNT; i++) {
         char key[8]; snprintf(key, sizeof(key), "relay%d", i + 1);
         cJSON_AddNumberToObject(r, key, s_relay[i]);
@@ -333,7 +395,7 @@ static char *build_telemetry_http_json(void)
     cJSON *r = cJSON_CreateObject();
     cJSON_AddStringToObject(r, "device_id", CONFIG_DEVICE_ID);
     cJSON_AddNumberToObject(r, "ph", s_ph); cJSON_AddNumberToObject(r, "ec", s_ec);
-    cJSON_AddNumberToObject(r, "water_temp", s_water_temp); cJSON_AddNumberToObject(r, "water_level", s_water_level);
+    cJSON_AddNumberToObject(r, "water_temp", s_temp1); cJSON_AddNumberToObject(r, "water_temp2", s_temp2); cJSON_AddNumberToObject(r, "water_level", s_water_level);
     for (int i = 0; i < RELAY_COUNT; i++) {
         char key[8]; snprintf(key, sizeof(key), "relay%d", i + 1);
         cJSON_AddNumberToObject(r, key, s_relay[i]);
@@ -353,6 +415,11 @@ static void handle_incoming_message(const char *data, int len)
     if (!r) return;
     cJSON *t = cJSON_GetObjectItem(r, "type");
     if (t && cJSON_IsString(t) && strcmp(t->valuestring, "relay_cmd") == 0) {
+        cJSON *cal = cJSON_GetObjectItem(r, "ph_cal");
+        if (cal && cJSON_IsNumber(cal)) {
+            s_ph_cal = (float)cal->valuedouble;
+            ESP_LOGI(TAG, "pH calibration set to %.2f", s_ph_cal);
+        }
         for (int i = 0; i < RELAY_COUNT; i++) {
             char key[8]; snprintf(key, sizeof(key), "relay%d", i + 1);
             cJSON *v = cJSON_GetObjectItem(r, key);
@@ -429,7 +496,7 @@ static void send_telemetry_http(void)
     ESP_LOGI(TAG, "HTTP POST %s (status=%d)", s_http_ok ? "OK" : "FAIL", status);
     esp_http_client_cleanup(cl); cJSON_free(j);
 }
-static void telemetry_task(void *pv) { while (1) { if (s_wifi_connected) send_telemetry_http(); vTaskDelay(pdMS_TO_TICKS(SEND_INTERVAL_MS)); } }
+static void telemetry_task(void *pv) { while (1) { if (s_wifi_connected) { read_temp_sensors(); send_telemetry_http(); } vTaskDelay(pdMS_TO_TICKS(SEND_INTERVAL_MS)); } }
 #endif
 
 // ============================================================
@@ -503,6 +570,12 @@ static bool ws_connect(const char *host, int port, const char *path)
         if (esp_timer_get_time() > deadline) { esp_tls_conn_destroy(s_tls); s_tls = NULL; return false; }
     }
     if (!strstr(resp, "101")) { esp_tls_conn_destroy(s_tls); s_tls = NULL; return false; }
+    // Set socket timeout for non-blocking reads
+    int fd;
+    if (esp_tls_get_conn_sockfd(s_tls, &fd) == ESP_OK) {
+        struct timeval tv = { .tv_sec = 0, .tv_usec = 200000 }; // 200ms
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    }
     ESP_LOGI(TAG, "WSS handshake OK");
     return true;
 }
@@ -521,13 +594,20 @@ static void telemetry_ws_task(void *pv)
             websocket_init();
             continue;
         }
+        read_temp_sensors();
         char *j = build_telemetry_ws_json();
         if (j) { ws_send_frame(j); cJSON_free(j); }
-        // Non-blocking read — don't disconnect if no data
+        vTaskDelay(pdMS_TO_TICKS(SEND_INTERVAL_MS));
+    }
+}
+static void ws_reader_task(void *pv)
+{
+    while (1) {
+        if (!s_ws_connected || !s_tls) { vTaskDelay(pdMS_TO_TICKS(500)); continue; }
         char buf[512];
         int r = ws_read_frame(buf, sizeof(buf));
         if (r > 0) handle_incoming_message(buf, r);
-        vTaskDelay(pdMS_TO_TICKS(SEND_INTERVAL_MS));
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 #endif // CONFIG_USE_WEBSOCKET
@@ -545,11 +625,12 @@ void app_main(void)
     ESP_LOGI(TAG, "=== Greeny Smart Hydroponics - %s ===", CONFIG_DEVICE_ID);
     esp_err_t r = nvs_flash_init();
     if (r == ESP_ERR_NVS_NO_FREE_PAGES || r == ESP_ERR_NVS_NEW_VERSION_FOUND) { nvs_flash_erase(); nvs_flash_init(); }
-    adc_init_all(); relay_init_all(); oled_setup(); read_all_sensors();
+    adc_init_all(); relay_init_all(); ds18b20_init(); oled_setup();
     wifi_init_all();
     xTaskCreate(oled_task, "oled", 3072, NULL, 3, NULL);
 #ifdef CONFIG_USE_WEBSOCKET
     xTaskCreate(telemetry_ws_task, "ws_tel", 8192, NULL, 5, NULL);
+    xTaskCreate(ws_reader_task, "ws_rdr", 4096, NULL, 4, NULL);
 #else
     xTaskCreate(telemetry_task, "http_tel", 8192, NULL, 5, NULL);
 #endif

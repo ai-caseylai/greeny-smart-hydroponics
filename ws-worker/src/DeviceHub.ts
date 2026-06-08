@@ -89,7 +89,7 @@ export class DeviceHub {
           data.ph || 0, data.ec || 0, data.water_temp || 0, data.water_level || 0,
           data.ndvi || 0, data.spectral_red || 0, data.spectral_green || 0,
           data.spectral_blue || 0, data.spectral_nir || 0,
-          data.relay1 || 0, data.relay2 || 0, tsMs, now
+          data.relay1 || 0, data.relay2 || 0, data.relay3 || 0, data.relay4 || 0, tsMs, now
         ).run().catch(() => {});
 
         // Check alerts
@@ -118,7 +118,7 @@ export class DeviceHub {
             water_level: data.water_level, ndvi: data.ndvi,
             spectral_red: data.spectral_red, spectral_green: data.spectral_green,
             spectral_blue: data.spectral_blue, spectral_nir: data.spectral_nir,
-            relay1: data.relay1, relay2: data.relay2,
+            relay1: data.relay1, relay2: data.relay2, relay3: data.relay3, relay4: data.relay4,
           },
           ts_ms: tsMs,
         });
@@ -130,17 +130,17 @@ export class DeviceHub {
         if (!deviceId) return;
         const targetWs = this.devices.get(deviceId);
         if (targetWs) {
-          targetWs.send(JSON.stringify({
-            type: 'relay_cmd',
-            relay1: data.relay1,
-            relay2: data.relay2,
-          }));
-          // Acknowledge to dashboard
+          const cmd: any = { type: 'relay_cmd' };
+          for (let i = 1; i <= 4; i++) {
+            const key = `relay${i}`;
+            if (data[key] !== undefined) cmd[key] = data[key];
+          }
+          if (data.ph_cal !== undefined) cmd.ph_cal = data.ph_cal;
+          targetWs.send(JSON.stringify(cmd));
           this.broadcastToDashboards({
             type: 'relay_ack',
             device_id: deviceId,
-            relay1: data.relay1,
-            relay2: data.relay2,
+            ...cmd,
           });
         }
         break;

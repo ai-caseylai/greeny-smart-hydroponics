@@ -6,7 +6,8 @@ interface TelemetryUpdate {
   data: {
     ph: number; ec: number; water_temp: number; water_level: number
     ndvi: number; spectral_red: number; spectral_green: number
-    spectral_blue: number; spectral_nir: number; relay1: number; relay2: number
+    spectral_blue: number; spectral_nir: number
+    relay1: number; relay2: number; relay3: number; relay4: number
   }
   ts_ms: number
 }
@@ -38,7 +39,6 @@ export function useWebSocket(officeId: number | null) {
 
     ws.onopen = () => {
       setConnected(true)
-      // Send periodic ping to keep alive
       const pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'ping' }))
@@ -60,7 +60,6 @@ export function useWebSocket(officeId: number | null) {
     ws.onclose = () => {
       setConnected(false)
       wsRef.current = null
-      // Auto reconnect after 3s
       clearTimeout(reconnectTimerRef.current)
       reconnectTimerRef.current = window.setTimeout(connect, 3000)
     }
@@ -91,16 +90,24 @@ export function useWebSocket(officeId: number | null) {
     }
   }, [])
 
-  const sendRelay = useCallback((deviceId: string, relay1: number, relay2: number) => {
+  const sendRelay = useCallback((deviceId: string, relay1: number, relay2: number, relay3?: number, relay4?: number) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: any = { type: 'relay', device_id: deviceId, relay1, relay2 }
+      if (relay3 !== undefined) msg.relay3 = relay3
+      if (relay4 !== undefined) msg.relay4 = relay4
+      wsRef.current.send(JSON.stringify(msg))
+    }
+  }, [])
+
+  const sendPhCal = useCallback((deviceId: string, phCal: number) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'relay',
         device_id: deviceId,
-        relay1,
-        relay2,
+        ph_cal: phCal,
       }))
     }
   }, [])
 
-  return { connected, on, sendRelay }
+  return { connected, on, sendRelay, sendPhCal }
 }

@@ -26,3 +26,10 @@ dist-ssr
 .env.*
 .claude/
 .wrangler/
+# ESP32 firmware
+esp32-firmware/build/
+esp32-firmware/.cache/
+esp32-firmware/managed_components/
+esp32-firmware/dependencies.lock
+esp32-firmware/sdkconfig
+esp32-firmware/sdkconfig.old

@@ -4,7 +4,7 @@ import { useTelemetry } from '../hooks/useSensorData'
 import { useOffice } from '../context/OfficeContext'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useTranslation } from 'react-i18next'
-import { Search, Settings, Droplets, Zap, Thermometer, ChevronLeft, ChevronRight, Leaf, ToggleLeft, ToggleRight, Wifi, WifiOff } from 'lucide-react'
+import { Search, Settings, Droplets, Zap, Thermometer, ChevronLeft, ChevronRight, Leaf, ToggleLeft, ToggleRight, Wifi, WifiOff, FlaskConical } from 'lucide-react'
 import { timeAgo } from '../lib/utils'
 
 const statusDotColors: Record<string, string> = {
@@ -27,14 +27,13 @@ export default function DeviceControlPage() {
   const { selectedOfficeId } = useOffice()
   const { devices, loading } = useDevices(selectedOfficeId)
   const { data: telemetry } = useTelemetry(undefined, 200, selectedOfficeId)
-  const { connected: wsConnected, on, sendRelay } = useWebSocket(selectedOfficeId)
+  const { connected: wsConnected, on, sendRelay, sendPhCal } = useWebSocket(selectedOfficeId)
   const { t } = useTranslation('devices')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [liveStatus, setLiveStatus] = useState<Record<string, string>>({})
   const pageSize = 20
 
-  // Listen for real-time device status updates
   useEffect(() => {
     const unsub1 = on('device_status', (msg: any) => {
       setLiveStatus(prev => ({ ...prev, [msg.device_id]: msg.status }))
@@ -92,7 +91,7 @@ export default function DeviceControlPage() {
           const latestT = telemetry.find((t) => t.device_id === d.id)
           const effectiveStatus = liveStatus[d.id] || d.status
           return (
-            <DeviceCard key={d.id} device={{ ...d, status: effectiveStatus as any }} latestT={latestT} statusLabels={statusLabels} t={t} sendRelay={sendRelay} />
+            <DeviceCard key={d.id} device={{ ...d, status: effectiveStatus as any }} latestT={latestT} statusLabels={statusLabels} t={t} sendRelay={sendRelay} sendPhCal={sendPhCal} />
           )
         })}
       </div>
@@ -129,21 +128,30 @@ export default function DeviceControlPage() {
   )
 }
 
-function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay }: {
-  device: any; latestT: any; statusLabels: Record<string, string>; t: (key: string, opts?: any) => string; sendRelay: (id: string, r1: number, r2: number) => void
+function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal }: {
+  device: any; latestT: any; statusLabels: Record<string, string>; t: (key: string, opts?: any) => string
+  sendRelay: (id: string, r1: number, r2: number, r3?: number, r4?: number) => void
+  sendPhCal: (id: string, cal: number) => void
 }) {
   const [relay1, setRelay1] = useState(latestT?.relay1 === 1)
   const [relay2, setRelay2] = useState(latestT?.relay2 === 1)
+  const [relay3, setRelay3] = useState(latestT?.relay3 === 1)
+  const [relay4, setRelay4] = useState(latestT?.relay4 === 1)
+  const [phCal, setPhCal] = useState('21.34')
+  const [showPhCal, setShowPhCal] = useState(false)
 
-  const toggleRelay = (relayNum: 1 | 2, value: boolean) => {
-    const newVal = value ? 1 : 0
-    if (relayNum === 1) {
-      setRelay1(value)
-      sendRelay(d.id, newVal, relay2 ? 1 : 0)
-    } else {
-      setRelay2(value)
-      sendRelay(d.id, relay1 ? 1 : 0, newVal)
-    }
+  const toggleRelay = (num: number, value: boolean) => {
+    const v = value ? 1 : 0
+    const relays = [relay1, relay2, relay3, relay4]
+    relays[num - 1] = value
+    const setters = [setRelay1, setRelay2, setRelay3, setRelay4]
+    setters[num - 1](value)
+    sendRelay(d.id, relays[0] ? 1 : 0, relays[1] ? 1 : 0, relays[2] ? 1 : 0, relays[3] ? 1 : 0)
+  }
+
+  const applyPhCal = () => {
+    const val = parseFloat(phCal)
+    if (!isNaN(val) && val > 0) sendPhCal(d.id, val)
   }
 
   return (
@@ -172,43 +180,65 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay }: {
             <Droplets className="h-3.5 w-3.5 text-blue-500" />
             <div>
               <p className="text-[10px] text-gray-400">pH</p>
-              <p className="text-sm font-medium">{latestT.ph.toFixed(1)}</p>
+              <p className="text-sm font-medium">{latestT.ph?.toFixed(2) ?? '-'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Zap className="h-3.5 w-3.5 text-green-500" />
             <div>
               <p className="text-[10px] text-gray-400">EC</p>
-              <p className="text-sm font-medium">{latestT.ec} μS</p>
+              <p className="text-sm font-medium">{latestT.ec ?? '-'} μS</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Thermometer className="h-3.5 w-3.5 text-pink-500" />
             <div>
-              <p className="text-[10px] text-gray-400">{t('waterTemp', { defaultValue: 'Water Temp' })}</p>
-              <p className="text-sm font-medium">{latestT.water_temp.toFixed(1)}°C</p>
+              <p className="text-[10px] text-gray-400">{t('waterTemp', { defaultValue: 'T1' })}</p>
+              <p className="text-sm font-medium">{latestT.water_temp?.toFixed(1) ?? '-'}°C</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Leaf className="h-3.5 w-3.5 text-green-600" />
             <div>
               <p className="text-[10px] text-gray-400">NDVI</p>
-              <p className="text-sm font-medium">{latestT.ndvi.toFixed(2)}</p>
+              <p className="text-sm font-medium">{latestT.ndvi?.toFixed(2) ?? '-'}</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Relay controls */}
+      {/* Relay controls — 4 relays */}
       <div className="flex items-center gap-3 pt-3 border-t border-border/50 mb-3">
-        <button onClick={() => toggleRelay(1, !relay1)} className="flex items-center gap-1 text-xs">
-          {relay1 ? <ToggleRight className="h-4 w-4 text-[#00a65a]" /> : <ToggleLeft className="h-4 w-4 text-gray-400" />}
-          <span className={relay1 ? 'text-[#00a65a] font-medium' : 'text-gray-500'}>R1</span>
+        {[1, 2, 3, 4].map(n => {
+          const states = [relay1, relay2, relay3, relay4]
+          return (
+            <button key={n} onClick={() => toggleRelay(n, !states[n - 1])} className="flex items-center gap-1 text-xs">
+              {states[n - 1] ? <ToggleRight className="h-4 w-4 text-[#00a65a]" /> : <ToggleLeft className="h-4 w-4 text-gray-400" />}
+              <span className={states[n - 1] ? 'text-[#00a65a] font-medium' : 'text-gray-500'}>R{n}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* pH Calibration */}
+      <div className="pt-2 border-t border-border/50 mb-2">
+        <button onClick={() => setShowPhCal(!showPhCal)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-[#00a65a]">
+          <FlaskConical className="h-3 w-3" />
+          pH Cal
         </button>
-        <button onClick={() => toggleRelay(2, !relay2)} className="flex items-center gap-1 text-xs">
-          {relay2 ? <ToggleRight className="h-4 w-4 text-[#00a65a]" /> : <ToggleLeft className="h-4 w-4 text-gray-400" />}
-          <span className={relay2 ? 'text-[#00a65a] font-medium' : 'text-gray-500'}>R2</span>
-        </button>
+        {showPhCal && (
+          <div className="flex items-center gap-2 mt-2">
+            <input
+              type="number" step="0.01" value={phCal}
+              onChange={(e) => setPhCal(e.target.value)}
+              className="w-20 rounded border border-border px-2 py-1 text-xs outline-none focus:border-[#00a65a]"
+            />
+            <button onClick={applyPhCal}
+              className="rounded bg-[#00a65a] px-2 py-1 text-xs text-white hover:bg-[#008a4a]">
+              Set
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between pt-3 border-t border-border/50">
