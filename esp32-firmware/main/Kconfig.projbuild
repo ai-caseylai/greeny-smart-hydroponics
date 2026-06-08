@@ -1,0 +1,31 @@
+menu "Greeny Sensor Configuration"
+
+    config WIFI_SSID
+        string "WiFi SSID"
+        default "SmarTone_HBB_3A74"
+
+    config WIFI_PASSWORD
+        string "WiFi Password"
+        default "6J25GJ2GB5"
+
+    config DEVICE_ID
+        string "Device ID"
+        default "WSD-001"
+
+    config OFFICE_ID
+        string "Office ID"
+        default "1"
+
+    config WS_HOST
+        string "WebSocket Host"
+        default "greeny-ws.techforliving.net"
+
+    config SEND_INTERVAL_SEC
+        int "Telemetry send interval (seconds)"
+        default 5
+
+    config USE_WEBSOCKET
+        bool "Use WebSocket mode (uncheck for HTTPS POST only)"
+        default y
+
+endmenu
