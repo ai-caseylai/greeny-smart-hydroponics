@@ -3,16 +3,21 @@
  *
  * Wristband for children's physical activity monitoring.
  * Tracks steps & activity intensity. Stores per-minute records in flash.
- * BLE sync to parent's phone. 1-2 week battery on 150mAh LiPo.
+ * BLE sync to parent's phone.
+ *
+ * Power: IMU Wake-on-Motion (WOM) + inactivity detection.
+ *   SLEEP:  IMU WOM mode (~20μA) + MCU deep sleep (~1μA) = 21μA
+ *   ACTIVE: IMU 25Hz full (~0.7mA) + MCU recording (~4mA) = 4.7mA
+ *   Child active ~2h/day: average ~350μA → 150mAh LiPo = ~18 days
  *
  * Hardware:
  *   CH582M QFN28     — RISC-V BLE 5.0 MCU
  *   ICM-42670-P      — 6-axis IMU (I2C addr 0x68)
  *   150mAh LiPo      — USB-C charging via TP4056
- *   WS2812 RGB LED   — status indicator
- *   Tactile button   — sync trigger
+ *   LED + Button     — status indicator + sync trigger
  *
  * I2C pins:  PA2=SDA, PA3=SCL
+ * IMU INT1:  PA1 (GPIO interrupt, wakes MCU from deep sleep)
  * LED pin:   PA4
  * Button:    PA5 (active low, internal pull-up)
  *
@@ -34,12 +39,15 @@
 // ============================================================
 // Constants
 // ============================================================
-#define IMU_SAMPLE_HZ     25      // IMU read rate (Hz)
+#define IMU_SAMPLE_HZ     25      // IMU read rate (Hz) in ACTIVE mode
+#define IMU_WOM_ODR_HZ    12      // IMU ODR in WOM sleep mode
 #define STEP_MIN_INTERVAL 200     // Min ms between steps (kids: up to 300/min)
 #define RECORD_INTERVAL   60      // Save record every 60 seconds
 #define FLASH_RECORD_MAX  35000   // Max records in flash ring buffer
 #define BATTERY_MV_MAX    4200    // LiPo full charge
 #define BATTERY_MV_MIN    3200    // LiPo cutoff
+#define INACTIVE_MINUTES  5       // Minutes without steps → return to SLEEP
+#define WOM_THRESHOLD_MG  150     // WOM wake threshold in mg (medium sensitivity)
 
 // Flash storage layout (CH582 internal flash, 448KB total)
 // Code+BLE stack: 0x00000000 - 0x00028000 (160KB)
@@ -63,13 +71,21 @@
 // ICM-42670-P register map
 #define REG_DEVICE_CONFIG  0x11
 #define REG_PWR_MGMT0      0x4E
+#define REG_PWR_MGMT0_ACCEL_LP  0x02  // Accel Low-Power mode
+#define REG_PWR_MGMT0_ACCEL_LN  0x03  // Accel Low-Noise mode
 #define REG_ACCEL_CONFIG0  0x50
 #define REG_GYRO_CONFIG0   0x4F
+#define REG_ACCEL_CONFIG1  0x52  // Accel LP averaging
+#define REG_GYRO_CONFIG0_STANDBY 0x00  // Gyro off
 #define REG_ACCEL_DATA_X1  0x1F  // Accel X[15:8]
 #define REG_GYRO_DATA_X1   0x25  // Gyro X[15:8]
 #define REG_INT_CONFIG     0x14
+#define REG_INT_SOURCE0    0x63  // Interrupt source routing
+#define REG_WOM_CONFIG     0x57  // WOM threshold
+#define REG_SMD_CONFIG     0x58  // Significant Motion Detect
 #define REG_FIFO_CONFIG    0x16
 #define REG_INT_STATUS     0x2D
+#define REG_INT_STATUS_WOM 0x80  // WOM interrupt flag
 #define REG_TEMP_DATA1     0x1D
 
 // ---- I2C helpers (CH582 HAL) ----
@@ -93,6 +109,11 @@ static bool imu_init(void) {
     GPIOA_ModeCfg(GPIO_Pin_2|GPIO_Pin_3, GPIO_ModeIN_PU);
     I2C_Init(I2C_Mode_I2C, 400000, I2C_Ack_Enable);
 
+    // IMU INT1 pin: PA1 as input with interrupt (wakes MCU from deep sleep)
+    GPIOA_ModeCfg(GPIO_Pin_1, GPIO_ModeIN_PU);
+    GPIOA_ITModeCfg(GPIO_Pin_1, GPIO_IT_Rise);   // Rising edge = WOM detected
+    PFIC_EnableIRQ(GPIOA_IRQn);                    // Enable GPIOA interrupt
+
     // Verify IMU
     uint8_t who = imu_read_reg(IMU_WHOAMI);
     if (who != 0x67) {
@@ -104,20 +125,8 @@ static bool imu_init(void) {
     imu_write_reg(REG_DEVICE_CONFIG, 0x01);
     for (volatile uint32_t i = 0; i < 10000; i++);  // ~10ms
 
-    // Power management: turn on accel + gyro in low-noise mode
-    imu_write_reg(REG_PWR_MGMT0, 0x0F);  // Accel LN + Gyro LN + Temp on
-
-    // Accel config: ±4g, 25Hz ODR, low-power averaging
-    imu_write_reg(REG_ACCEL_CONFIG0, (0x04 << 5) | 0x04);  // ±4g, ODR=25Hz
-
-    // Gyro config: ±500dps, 25Hz ODR
-    imu_write_reg(REG_GYRO_CONFIG0, (0x02 << 5) | 0x04);  // ±500dps, ODR=25Hz
-
-    // Interrupt: data ready on INT1
-    imu_write_reg(REG_INT_CONFIG, 0x01);  // INT1 = data ready
-
-    // FIFO: disabled (we poll at 25Hz)
-    imu_write_reg(REG_FIFO_CONFIG, 0x00);
+    // Start in WOM sleep mode (ultra low power)
+    imu_enter_wom_mode();
 
     return true;
 }
@@ -141,6 +150,74 @@ static void imu_read_6axis(int16_t accel[3], int16_t gyro[3]) {
     for (int i = 0; i < 3; i++) {
         int16_t raw = (int16_t)((buf[6+i*2] << 8) | buf[7+i*2]);
         gyro[i] = (int16_t)(((int32_t)raw * 1000) / 6554);  // mdps
+    }
+}
+
+// ============================================================
+// Device state machine
+// ============================================================
+typedef enum {
+    STATE_SLEEP  = 0,  // IMU WOM + MCU deep sleep (21μA)
+    STATE_ACTIVE = 1,  // IMU full + MCU recording (4.7mA)
+} device_state_t;
+
+static device_state_t device_state = STATE_SLEEP;
+static uint32_t inactive_minutes;    // consecutive minutes with no steps
+static bool     wom_triggered;       // set by GPIO interrupt
+
+// ---- Enter WOM sleep mode ----
+static void imu_enter_wom_mode(void) {
+    // Stop gyro (saves ~0.5mA)
+    imu_write_reg(REG_PWR_MGMT0, REG_PWR_MGMT0_ACCEL_LP);  // Accel LP mode, gyro off
+
+    // Accel: low ODR for WOM
+    // ODR = 12.5Hz, ±4g, LP averaging
+    uint8_t odr_lp = 0x03;  // 12.5Hz in LP mode
+    imu_write_reg(REG_ACCEL_CONFIG0, (0x04 << 5) | odr_lp);  // ±4g, LP ODR
+    imu_write_reg(REG_ACCEL_CONFIG1, 0x00);  // 1x averaging (lowest power)
+
+    // WOM threshold: WOM_THRESHOLD_MG / (1000/8192) ≈ WOM_THRESHOLD_MG * 8 / 1000
+    // For 150mg: 150 * 256 / 1000 ≈ 38 LSBs
+    uint8_t wom_thr = (uint8_t)((WOM_THRESHOLD_MG * 256UL) / 1000);
+    imu_write_reg(REG_WOM_CONFIG, wom_thr);  // WOM_X | WOM_Y | WOM_Z (bits 6-4)
+
+    // Route WOM interrupt to INT1
+    imu_write_reg(REG_INT_SOURCE0, 0x80);  // WOM interrupt → INT1
+
+    // INT1: push-pull, active high, cleared by status read
+    imu_write_reg(REG_INT_CONFIG, 0x02);  // INT1 push-pull pulsed
+
+    device_state = STATE_SLEEP;
+}
+
+// ---- Enter full active mode ----
+static void imu_enter_active_mode(void) {
+    // Accel + Gyro in low-noise mode
+    imu_write_reg(REG_PWR_MGMT0, 0x0F);  // Accel LN + Gyro LN + Temp
+
+    // Accel: ±4g, 25Hz ODR
+    imu_write_reg(REG_ACCEL_CONFIG0, (0x04 << 5) | 0x04);
+
+    // Gyro: ±500dps, 25Hz ODR
+    imu_write_reg(REG_GYRO_CONFIG0, (0x02 << 5) | 0x04);
+
+    // Disable WOM interrupt routing
+    imu_write_reg(REG_INT_SOURCE0, 0x00);
+    imu_write_reg(REG_INT_CONFIG, 0x00);  // INT1 disabled
+
+    inactive_minutes = 0;
+    wom_triggered = false;
+    device_state = STATE_ACTIVE;
+}
+
+// ---- GPIO interrupt handler: IMU INT1 wakes MCU from SLEEP ----
+// PA1 = IMU INT1, rising edge = WOM detected
+__attribute__((interrupt)) void GPIOA_IRQHandler(void) {
+    if (GPIOA_ReadITFlagBit(GPIO_Pin_1)) {
+        GPIOA_ClearITFlagBit(GPIO_Pin_1);
+        if (device_state == STATE_SLEEP) {
+            wom_triggered = true;
+        }
     }
 }
 
@@ -450,116 +527,143 @@ int main(void) {
     storage_init();
     PFIC_EnableAllIRQ();
 
-    uint32_t last_imu_read = 0;
-    uint32_t last_record_save = 0;
-    uint32_t last_ble_notify = 0;
-    uint32_t now;
-
+    uint32_t now, last_record_save = 0, last_inactive_check = 0;
     uint32_t minute_steps = 0;
     uint8_t  minute_active_sec = 0;
     uint8_t  minute_intensity = 0;
 
-    // LED: boot OK
+    // Start in SLEEP mode: IMU WOM + MCU deep sleep
+    // IMU INT1 will wake us when child moves
     led_blink(1);
 
     while (1) {
         now = rtc_seconds();
 
-        // ---- IMU reading & step detection ----
-        if (now - last_imu_read >= 1) {  // 1 second tick (or use timer)
-            last_imu_read = now;
+        // ====================================================
+        // STATE: SLEEP (IMU WOM mode, 21μA)
+        //   IMU watches for motion. INT1 → wakes MCU.
+        //   MCU deep sleeps. No IMU polling needed.
+        // ====================================================
+        if (device_state == STATE_SLEEP) {
 
-            int16_t accel[3], gyro[3];
-            imu_read_6axis(accel, gyro);
-            step_detect(accel[0], accel[1], accel[2], now * 1000);
+            // Check if WOM triggered (GPIO interrupt set flag)
+            if (wom_triggered) {
+                // Vibration detected → switch to ACTIVE
+                imu_enter_active_mode();
+                led_blink(2);  // Signal: woke up
+                continue;      // Skip sleep, go measure
+            }
 
-            // Accumulate minute stats
-            minute_steps = (uint16_t)step_count;
-            minute_active_sec = activity_seconds;
-            // Classify intensity
-            if (minute_active_sec > 40)
-                minute_intensity = INTENSITY_HIGH;
-            else if (minute_active_sec > 15)
-                minute_intensity = INTENSITY_MEDIUM;
-            else
-                minute_intensity = INTENSITY_LOW;
+            // In SLEEP: still handle BLE if phone is connected
+            if (ble_connected && sync_active) {
+                activity_record_t rec;
+                if (storage_read(sync_index, &rec)) {
+                    uint8_t buf[RECORD_SIZE];
+                    buf[0] = (rec.timestamp>>0)&0xFF;  buf[1] = (rec.timestamp>>8)&0xFF;
+                    buf[2] = (rec.timestamp>>16)&0xFF; buf[3] = (rec.timestamp>>24)&0xFF;
+                    buf[4] = rec.steps&0xFF;            buf[5] = (rec.steps>>8)&0xFF;
+                    buf[6] = rec.active_sec;            buf[7] = rec.intensity;
+                    GATT_Notify(0, buf, RECORD_SIZE);
+                    sync_index++;
+                } else {
+                    uint8_t end[] = {0xFF,0xFF,0xFF,0xFF,0,0,0,0};
+                    GATT_Notify(0, end, RECORD_SIZE);
+                    sync_active = 0;
+                }
+            }
 
-            // ---- BLE live data notify ----
-            if (ble_connected && live_notify_enabled &&
-                now - last_ble_notify >= 1) {
-                last_ble_notify = now;
-                // Send live data via BLE notify
-                uint8_t live[16];
-                live[0] = (accel[0] >> 8) & 0xFF; live[1] = accel[0] & 0xFF;
-                live[2] = (accel[1] >> 8) & 0xFF; live[3] = accel[1] & 0xFF;
-                live[4] = (accel[2] >> 8) & 0xFF; live[5] = accel[2] & 0xFF;
-                live[6] = (gyro[0] >> 8) & 0xFF;  live[7] = gyro[0] & 0xFF;
-                live[8] = (gyro[1] >> 8) & 0xFF;  live[9] = gyro[1] & 0xFF;
-                live[10]= (gyro[2] >> 8) & 0xFF;  live[11]= gyro[2] & 0xFF;
-                live[12]= (step_count >> 0) & 0xFF;
-                live[13]= (step_count >> 8) & 0xFF;
-                live[14]= (step_count >> 16) & 0xFF;
-                live[15]= (step_count >> 24) & 0xFF;
-                GATT_Notify(0, live, 16);  // Send via BLE
+            // Deep sleep: WFI + GPIO interrupt wakes us
+            // No RTC timer needed in SLEEP (IMU INT1 handles wake)
+            // But we wake periodically from BLE advertising events
+            __WFI();
+            WDOG_Feed();
+            continue;  // Back to SLEEP check
+        }
+
+        // ====================================================
+        // STATE: ACTIVE (IMU full 25Hz + MCU recording, 4.7mA)
+        // ====================================================
+        // Read IMU & detect steps
+        int16_t accel[3], gyro[3];
+        imu_read_6axis(accel, gyro);
+        step_detect(accel[0], accel[1], accel[2], now * 1000);
+
+        minute_steps = (uint16_t)step_count;
+        minute_active_sec = activity_seconds;
+        if (minute_active_sec > 40) minute_intensity = INTENSITY_HIGH;
+        else if (minute_active_sec > 15) minute_intensity = INTENSITY_MEDIUM;
+        else minute_intensity = INTENSITY_LOW;
+
+        // ---- Save minute record ----
+        if (now - last_record_save >= RECORD_INTERVAL) {
+            last_record_save = now;
+            activity_record_t rec;
+            rec.timestamp  = now / 60;
+            rec.steps      = minute_steps;
+            rec.active_sec = minute_active_sec;
+            rec.intensity  = minute_intensity;
+            storage_write(&rec);
+            step_count -= minute_steps;
+            activity_seconds = 0;
+            led_set(1); for (volatile uint32_t i=0; i<30000; i++); led_set(0);
+        }
+
+        // ---- Inactivity check: return to SLEEP ----
+        if (now - last_inactive_check >= 60) {
+            last_inactive_check = now;
+            if (minute_steps == 0) {
+                inactive_minutes++;
+                if (inactive_minutes >= INACTIVE_MINUTES) {
+                    // 5+ minutes no movement → back to SLEEP
+                    imu_enter_wom_mode();
+                    led_blink(1);  // Signal: sleeping
+                    continue;
+                }
+            } else {
+                inactive_minutes = 0;  // Reset counter on activity
             }
         }
 
-        // ---- Save minute record to flash ----
-        if (now - last_record_save >= RECORD_INTERVAL) {
-            last_record_save = now;
-
-            activity_record_t rec;
-            rec.timestamp   = now / 60;  // Minutes since boot
-            rec.steps       = minute_steps;
-            rec.active_sec  = minute_active_sec;
-            rec.intensity   = minute_intensity;
-            storage_write(&rec);
-
-            // Reset minute counters
-            step_count -= minute_steps;  // Keep running total
-            activity_seconds = 0;
-
-            // Brief LED flash on record save
-            led_set(1);
-            for (volatile uint32_t i = 0; i < 60000; i++);
-            led_set(0);
+        // ---- BLE live data notify (ACTIVE only) ----
+        if (ble_connected && live_notify_enabled) {
+            uint8_t live[16];
+            live[0]=(accel[0]>>8)&0xFF; live[1]=accel[0]&0xFF;
+            live[2]=(accel[1]>>8)&0xFF; live[3]=accel[1]&0xFF;
+            live[4]=(accel[2]>>8)&0xFF; live[5]=accel[2]&0xFF;
+            live[6]=(gyro[0]>>8)&0xFF;  live[7]=gyro[0]&0xFF;
+            live[8]=(gyro[1]>>8)&0xFF;  live[9]=gyro[1]&0xFF;
+            live[10]=(gyro[2]>>8)&0xFF; live[11]=gyro[2]&0xFF;
+            live[12]=(step_count>>0)&0xFF; live[13]=(step_count>>8)&0xFF;
+            live[14]=(step_count>>16)&0xFF; live[15]=(step_count>>24)&0xFF;
+            GATT_Notify(0, live, 16);
         }
 
-        // ---- BLE sync: stream stored records ----
+        // ---- BLE sync handler ----
         if (ble_connected && sync_active) {
             activity_record_t rec;
             if (storage_read(sync_index, &rec)) {
                 uint8_t buf[RECORD_SIZE];
-                buf[0] = (rec.timestamp >> 0)  & 0xFF;
-                buf[1] = (rec.timestamp >> 8)  & 0xFF;
-                buf[2] = (rec.timestamp >> 16) & 0xFF;
-                buf[3] = (rec.timestamp >> 24) & 0xFF;
-                buf[4] = rec.steps & 0xFF;
-                buf[5] = (rec.steps >> 8) & 0xFF;
-                buf[6] = rec.active_sec;
-                buf[7] = rec.intensity;
+                buf[0]=(rec.timestamp>>0)&0xFF;  buf[1]=(rec.timestamp>>8)&0xFF;
+                buf[2]=(rec.timestamp>>16)&0xFF; buf[3]=(rec.timestamp>>24)&0xFF;
+                buf[4]=rec.steps&0xFF;            buf[5]=(rec.steps>>8)&0xFF;
+                buf[6]=rec.active_sec;            buf[7]=rec.intensity;
                 GATT_Notify(0, buf, RECORD_SIZE);
                 sync_index++;
             } else {
-                // All records sent → send end marker
-                uint8_t end_marker[] = {0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0};
-                GATT_Notify(0, end_marker, RECORD_SIZE);
+                uint8_t end[] = {0xFF,0xFF,0xFF,0xFF,0,0,0,0};
+                GATT_Notify(0, end, RECORD_SIZE);
                 sync_active = 0;
             }
         }
 
-        // ---- Button: toggle sync mode ----
-        if (button_pressed()) {
-            if (ble_connected) {
-                sync_active = !sync_active;
-                sync_index = 0;
-                // Debounce
-                for (volatile uint32_t i = 0; i < 6000000; i++);
-            }
+        // ---- Button handler ----
+        if (button_pressed() && ble_connected) {
+            sync_active = !sync_active; sync_index = 0;
+            for (volatile uint32_t i=0; i<6000000; i++);
         }
 
-        // ---- Sleep until next loop ----
-        __WFI();  // Woken by RTC tick
+        // ---- Sleep 1 second ----
+        __WFI();
         WDOG_Feed();
     }
 }
