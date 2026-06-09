@@ -63,6 +63,8 @@ static bool s_http_ok = false;
 // ===== WebSocket =====
 #ifdef CONFIG_USE_WEBSOCKET
 static bool s_ws_connected = false;
+static int64_t s_last_ws_activity = 0;
+#define WS_WATCHDOG_MS  65000  // 65s 沒心跳就重連
 #endif
 
 #define SEND_INTERVAL_MS  (CONFIG_SEND_INTERVAL_SEC * 1000)
@@ -220,7 +222,7 @@ static void oled_setup(void)
     oled_flush();
 }
 
-static float s_ph_cal = 21.34f;
+static float s_ph_cal = 16.43f;
 
 // ============================================================
 // OLED 顯示更新
@@ -278,22 +280,71 @@ static uint32_t adc_read_mv(adc_channel_t ch)
     return (uint32_t)mv;
 }
 
-static float read_ph(void)
+static int adc_median(adc_channel_t ch, int count)
 {
-    int samples[6];
-    for (int i = 0; i < 6; i++) samples[i] = adc_read_raw(PH_CHANNEL);
-    for (int i = 0; i < 5; i++)
-        for (int j = i + 1; j < 6; j++)
-            if (samples[i] > samples[j]) { int t = samples[i]; samples[i] = samples[j]; samples[j] = t; }
-    int sum = 0;
-    for (int i = 1; i < 5; i++) sum += samples[i];
-    float volt = (float)sum / 4.0f * 3.3f / 4095.0f;
-    float T = (s_water_temp > 0) ? s_water_temp : 25.0f;
-    float slope = -5.70f * (T + 273.15f) / 298.15f;
-    return slope * volt + s_ph_cal;
+    int buf[count];
+    for (int i = 0; i < count; i++) buf[i] = adc_read_raw(ch);
+    for (int i = 0; i < count - 1; i++)
+        for (int j = i + 1; j < count; j++)
+            if (buf[i] > buf[j]) { int t = buf[i]; buf[i] = buf[j]; buf[j] = t; }
+    return buf[count / 2]; // median
 }
 
-static float read_tds(void) { return (float)adc_read_mv(TDS_CHANNEL); }
+static void adc_median_debug(adc_channel_t ch, int count, int *out_median, int *out_min, int *out_max)
+{
+    int buf[count];
+    for (int i = 0; i < count; i++) buf[i] = adc_read_raw(ch);
+    *out_min = *out_max = buf[0];
+    for (int i = 1; i < count; i++) {
+        if (buf[i] < *out_min) *out_min = buf[i];
+        if (buf[i] > *out_max) *out_max = buf[i];
+    }
+    for (int i = 0; i < count - 1; i++)
+        for (int j = i + 1; j < count; j++)
+            if (buf[i] > buf[j]) { int t = buf[i]; buf[i] = buf[j]; buf[j] = t; }
+    *out_median = buf[count / 2];
+}
+
+static float s_last_good_ph = 7.0f;
+static float s_last_good_tds = 0.0f;
+
+static float read_ph(void)
+{
+    int buf[50];
+    for (int i = 0; i < 50; i++) buf[i] = adc_read_raw(PH_CHANNEL);
+    for (int i = 0; i < 49; i++)
+        for (int j = i + 1; j < 50; j++)
+            if (buf[i] > buf[j]) { int t = buf[i]; buf[i] = buf[j]; buf[j] = t; }
+    int raw = buf[25];
+    int span = buf[49] - buf[0];
+    float volt = (float)raw * 3.3f / 4095.0f;
+    float T = (s_water_temp > 0) ? s_water_temp : 25.0f;
+    float slope = -5.70f * (T + 273.15f) / 298.15f;
+    float ph = slope * volt + s_ph_cal;
+    // pH 8.5 為水耕上限，超過即為 WiFi 雜訊 → 保留上次正常值
+    if (ph > 8.5f) return s_last_good_ph;
+    s_last_good_ph = ph;
+    return ph;
+}
+
+static float read_tds(void)
+{
+    int buf[50];
+    for (int i = 0; i < 50; i++) buf[i] = adc_read_raw(TDS_CHANNEL);
+    for (int i = 0; i < 49; i++)
+        for (int j = i + 1; j < 50; j++)
+            if (buf[i] > buf[j]) { int t = buf[i]; buf[i] = buf[j]; buf[j] = t; }
+    int raw = buf[25];
+    int span = buf[49] - buf[0];
+    float volt = (float)raw * 3.3f / 4095.0f;
+    float T = (s_water_temp > 0) ? s_water_temp : 25.0f;
+    float coeff = 1.0f + 0.02f * (T - 25.0f);
+    float v = volt / coeff;
+    float tds = (133.42f * v * v * v - 255.86f * v * v + 857.39f * v) * 0.5f;
+    if (tds > 2000.0f) return s_last_good_tds;
+    s_last_good_tds = tds;
+    return tds;
+}
 
 // ============================================================
 // DS18B20 (1-Wire on GPIO 13)
@@ -552,6 +603,7 @@ static bool ws_connect(const char *host, int port, const char *path)
         struct timeval tv = { .tv_sec = 0, .tv_usec = 200000 };
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     }
+    s_last_ws_activity = esp_timer_get_time();
     ESP_LOGI(TAG, "WSS handshake OK");
     return true;
 }
@@ -562,17 +614,34 @@ static void websocket_init(void)
     snprintf(path, sizeof(path), "/ws?device_id=%s&office_id=%s", CONFIG_DEVICE_ID, CONFIG_OFFICE_ID);
     if (ws_connect(CONFIG_WS_HOST, 443, path)) s_ws_connected = true;
 }
+static void ws_reset(void) {
+    ESP_LOGW(TAG, "WSS reset — disconnecting");
+    s_ws_connected = false;
+    if (s_tls) { esp_tls_conn_destroy(s_tls); s_tls = NULL; }
+}
+
 static void telemetry_ws_task(void *pv)
 {
     while (1) {
         if (!s_ws_connected) {
+            ESP_LOGI(TAG, "WSS offline — retry in 3s");
             vTaskDelay(pdMS_TO_TICKS(3000));
             websocket_init();
             continue;
         }
+        // Watchdog: no activity for >65s → force reconnect
+        int64_t idle_ms = (esp_timer_get_time() - s_last_ws_activity) / 1000;
+        if (idle_ms > WS_WATCHDOG_MS) {
+            ESP_LOGW(TAG, "WSS watchdog timeout (%lld ms idle), reconnecting...", idle_ms);
+            ws_reset();
+            continue;
+        }
         read_temp_sensor();
         char *j = build_telemetry_ws_json();
-        if (j) { ws_send_frame(j); cJSON_free(j); }
+        if (j) {
+            ESP_LOGI(TAG, "WSS send telemetry");
+            ws_send_frame(j); cJSON_free(j); s_last_ws_activity = esp_timer_get_time();
+        }
         vTaskDelay(pdMS_TO_TICKS(SEND_INTERVAL_MS));
     }
 }
@@ -582,7 +651,10 @@ static void ws_reader_task(void *pv)
         if (!s_ws_connected || !s_tls) { vTaskDelay(pdMS_TO_TICKS(500)); continue; }
         char buf[512];
         int r = ws_read_frame(buf, sizeof(buf));
-        if (r > 0) handle_incoming_message(buf, r);
+        if (r > 0) {
+            ESP_LOGI(TAG, "WSS recv: %s", buf);
+            handle_incoming_message(buf, r); s_last_ws_activity = esp_timer_get_time();
+}
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
@@ -591,7 +663,19 @@ static void ws_reader_task(void *pv)
 // ============================================================
 // OLED refresh task
 // ============================================================
-static void oled_task(void *pv) { while (1) { oled_update_display(); vTaskDelay(pdMS_TO_TICKS(1000)); } }
+static void oled_task(void *pv) {
+    int tick = 0;
+    while (1) {
+        s_ph = read_ph();
+        s_tds = read_tds();
+        read_temp_sensor();
+        oled_update_display();
+        if (++tick % 30 == 0) // 每 30 秒 log
+            ESP_LOGI(TAG, "OLED pH=%.2f TDS=%.0f T=%.1f R=%d%d",
+                     s_ph, s_tds, s_water_temp, s_relay[0], s_relay[1]);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
 
 // ============================================================
 // Main
