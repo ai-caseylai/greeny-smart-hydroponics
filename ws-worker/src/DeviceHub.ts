@@ -78,47 +78,44 @@ export class DeviceHub {
         const deviceId = data.device_id;
         if (!deviceId) return;
 
-        // Store in D1
         const now = Math.floor(Date.now() / 1000);
         const tsMs = data.ts_ms || Date.now();
+        const ph = data.ph || 0;
+        const tds = data.tds || data.ec || 0;
+        const waterTemp = data.water_temp || 0;
+
         this.env.DB.prepare(
           `INSERT INTO telemetry (device_id, ph, ec, water_temp, water_level, ndvi, spectral_red, spectral_green, spectral_blue, spectral_nir, relay1, relay2, ts_ms, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).bind(
           deviceId,
-          data.ph || 0, data.ec || 0, data.water_temp || 0, data.water_level || 0,
-          data.ndvi || 0, data.spectral_red || 0, data.spectral_green || 0,
-          data.spectral_blue || 0, data.spectral_nir || 0,
-          data.relay1 || 0, data.relay2 || 0, data.relay3 || 0, data.relay4 || 0, tsMs, now
+          ph, tds, waterTemp, 0,
+          0, 0, 0, 0, 0,
+          data.relay1 || 0, data.relay2 || 0, tsMs, now
         ).run().catch(() => {});
 
-        // Check alerts
-        if (data.ph && (data.ph < 5.5 || data.ph > 7.0)) {
+        if (ph && (ph < 5.5 || ph > 7.0)) {
           this.env.DB.prepare(
             `INSERT INTO alerts (device_id, type, message, severity, created_at) VALUES (?, 'ph_abnormal', ?, 'warning', ?)`
-          ).bind(deviceId, `${deviceId} pH異常：${data.ph}`, now).run().catch(() => {});
+          ).bind(deviceId, `${deviceId} pH異常：${ph}`, now).run().catch(() => {});
         }
-        if (data.ec && data.ec > 2000) {
+        if (tds && tds > 2000) {
           this.env.DB.prepare(
             `INSERT INTO alerts (device_id, type, message, severity, created_at) VALUES (?, 'ec_high', ?, 'warning', ?)`
-          ).bind(deviceId, `${deviceId} EC過高：${data.ec}`, now).run().catch(() => {});
+          ).bind(deviceId, `${deviceId} TDS過高：${tds}`, now).run().catch(() => {});
         }
-        if (data.water_temp && (data.water_temp < 18 || data.water_temp > 30)) {
+        if (waterTemp && (waterTemp < 18 || waterTemp > 30)) {
           this.env.DB.prepare(
             `INSERT INTO alerts (device_id, type, message, severity, created_at) VALUES (?, 'temp_abnormal', ?, 'warning', ?)`
-          ).bind(deviceId, `${deviceId} 水溫異常：${data.water_temp}°C`, now).run().catch(() => {});
+          ).bind(deviceId, `${deviceId} 水溫異常：${waterTemp}°C`, now).run().catch(() => {});
         }
 
-        // Forward to dashboards
         this.broadcastToDashboards({
           type: 'telemetry_update',
           device_id: deviceId,
           data: {
-            ph: data.ph, ec: data.ec, water_temp: data.water_temp,
-            water_level: data.water_level, ndvi: data.ndvi,
-            spectral_red: data.spectral_red, spectral_green: data.spectral_green,
-            spectral_blue: data.spectral_blue, spectral_nir: data.spectral_nir,
-            relay1: data.relay1, relay2: data.relay2, relay3: data.relay3, relay4: data.relay4,
+            ph, tds, water_temp: waterTemp,
+            relay1: data.relay1, relay2: data.relay2,
           },
           ts_ms: tsMs,
         });
