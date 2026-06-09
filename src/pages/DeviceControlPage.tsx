@@ -135,18 +135,17 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
 }) {
   const [relay1, setRelay1] = useState(latestT?.relay1 === 1)
   const [relay2, setRelay2] = useState(latestT?.relay2 === 1)
-  const [relay3, setRelay3] = useState(latestT?.relay3 === 1)
-  const [relay4, setRelay4] = useState(latestT?.relay4 === 1)
   const [phCal, setPhCal] = useState('21.34')
   const [showPhCal, setShowPhCal] = useState(false)
 
   const toggleRelay = (num: number, value: boolean) => {
-    const v = value ? 1 : 0
-    const relays = [relay1, relay2, relay3, relay4]
-    relays[num - 1] = value
-    const setters = [setRelay1, setRelay2, setRelay3, setRelay4]
-    setters[num - 1](value)
-    sendRelay(d.id, relays[0] ? 1 : 0, relays[1] ? 1 : 0, relays[2] ? 1 : 0, relays[3] ? 1 : 0)
+    if (num === 1) {
+      setRelay1(value)
+      sendRelay(d.id, value ? 1 : 0, relay2 ? 1 : 0)
+    } else {
+      setRelay2(value)
+      sendRelay(d.id, relay1 ? 1 : 0, value ? 1 : 0)
+    }
   }
 
   const applyPhCal = () => {
@@ -186,31 +185,24 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
           <div className="flex items-center gap-2">
             <Zap className="h-3.5 w-3.5 text-green-500" />
             <div>
-              <p className="text-[10px] text-gray-400">EC</p>
-              <p className="text-sm font-medium">{latestT.ec ?? '-'} μS</p>
+              <p className="text-[10px] text-gray-400">TDS</p>
+              <p className="text-sm font-medium">{latestT.tds ?? latestT.ec ?? '-'} ppm</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Thermometer className="h-3.5 w-3.5 text-pink-500" />
             <div>
-              <p className="text-[10px] text-gray-400">{t('waterTemp', { defaultValue: 'T1' })}</p>
+              <p className="text-[10px] text-gray-400">Temp</p>
               <p className="text-sm font-medium">{latestT.water_temp?.toFixed(1) ?? '-'}°C</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Leaf className="h-3.5 w-3.5 text-green-600" />
-            <div>
-              <p className="text-[10px] text-gray-400">NDVI</p>
-              <p className="text-sm font-medium">{latestT.ndvi?.toFixed(2) ?? '-'}</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Relay controls — 4 relays */}
+      {/* Relay controls — 2 relays */}
       <div className="flex items-center gap-3 pt-3 border-t border-border/50 mb-3">
-        {[1, 2, 3, 4].map(n => {
-          const states = [relay1, relay2, relay3, relay4]
+        {[1, 2].map(n => {
+          const states = [relay1, relay2]
           return (
             <button key={n} onClick={() => toggleRelay(n, !states[n - 1])} className="flex items-center gap-1 text-xs">
               {states[n - 1] ? <ToggleRight className="h-4 w-4 text-[#00a65a]" /> : <ToggleLeft className="h-4 w-4 text-gray-400" />}
