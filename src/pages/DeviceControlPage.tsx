@@ -186,7 +186,7 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
             <Zap className="h-3.5 w-3.5 text-green-500" />
             <div>
               <p className="text-[10px] text-gray-400">TDS</p>
-              <p className="text-sm font-medium">{latestT.tds ?? latestT.ec ?? '-'} ppm</p>
+              <p className="text-sm font-medium">{latestT.tds != null ? Math.round(latestT.tds) : (latestT.ec != null ? Math.round(latestT.ec) : '-')} ppm</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

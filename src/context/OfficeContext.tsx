@@ -20,7 +20,7 @@ const STORAGE_KEY = 'greeny-selected-office'
 export function OfficeProvider({ children }: { children: ReactNode }) {
   const [selectedOfficeId, setSelectedOfficeId] = useState<number | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? Number(saved) : null
+    return saved ? Number(saved) : 9
   })
 
   // Read user from localStorage to determine role and office
