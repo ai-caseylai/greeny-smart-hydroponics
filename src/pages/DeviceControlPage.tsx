@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useDevices } from '../hooks/useDevices'
 import { useTelemetry } from '../hooks/useSensorData'
 import { useOffice } from '../context/OfficeContext'
@@ -156,23 +156,25 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
   }
 
   const [relayStatus, setRelayStatus] = useState<'idle' | 'waiting' | 'ok'>('idle')
-  const [sentRelay, setSentRelay] = useState<{ num: number; val: number } | null>(null)
+  const sentRelayRef = useRef<{ num: number; val: number } | null>(null)
 
   // 監測 telemetry 確認 relay 已執行
   useEffect(() => {
-    if (!sentRelay || !latestT) return
-    const actual = sentRelay.num === 1 ? latestT.relay1 : latestT.relay2
-    if (actual === sentRelay.val) {
+    const sent = sentRelayRef.current
+    if (!sent || !latestT) return
+    const actual = sent.num === 1 ? latestT.relay1 : latestT.relay2
+    if (actual === sent.val) {
       setRelayStatus('ok')
-      setTimeout(() => { setRelayStatus('idle'); setSentRelay(null) }, 2000)
+      sentRelayRef.current = null
+      setTimeout(() => setRelayStatus('idle'), 2000)
     }
-  }, [latestT?.relay1, latestT?.relay2])
+  }, [latestT?.relay1, latestT?.relay2, latestT])
 
   const toggleWithStatus = (num: number, value: boolean) => {
     const v = value ? 1 : 0
     if (num === 1) { setRelay1(value); sendRelay(d.id, v, relay2 ? 1 : 0) }
     else { setRelay2(value); sendRelay(d.id, relay1 ? 1 : 0, v) }
-    setSentRelay({ num, val: v })
+    sentRelayRef.current = { num, val: v }
     setRelayStatus('waiting')
   }
 
