@@ -75,13 +75,25 @@ export default function DashboardPage() {
     { label: 'TDS', value: stats?.avg_ec != null ? stats.avg_ec.toFixed(0) + ' ppm' : '-', icon: Zap, color: '#FF9800' },
   ]
 
-  const trendMap = new Map<string, { ph: number[]; temp: number[] }>()
+  const [granularity, setGranularity] = useState<'hour' | 'day' | 'week' | 'month'>('hour')
+
+  const trendMap = new Map<string, { ph: number[]; temp: number[]; tds: number[] }>()
   filteredTelemetry.forEach((t) => {
-    const day = new Date(t.ts_ms).toLocaleDateString()
-    if (!trendMap.has(day)) trendMap.set(day, { ph: [], temp: [], tds: [] })
-    trendMap.get(day)!.ph.push(t.ph)
-    trendMap.get(day)!.temp.push(t.water_temp)
-    trendMap.get(day)!.tds.push(t.ec)
+    const d = new Date(t.ts_ms)
+    let key: string
+    if (granularity === 'hour') {
+      key = d.toLocaleDateString() + ' ' + d.getHours() + ':00'
+    } else if (granularity === 'day') {
+      key = d.toLocaleDateString()
+    } else if (granularity === 'week') {
+      const start = new Date(d); start.setDate(d.getDate() - d.getDay()); key = start.toLocaleDateString()
+    } else {
+      key = d.getFullYear() + '-' + (d.getMonth() + 1)
+    }
+    if (!trendMap.has(key)) trendMap.set(key, { ph: [], temp: [], tds: [] })
+    trendMap.get(key)!.ph.push(t.ph)
+    trendMap.get(key)!.temp.push(t.water_temp)
+    trendMap.get(key)!.tds.push(t.ec)
   })
   const trendData = Array.from(trendMap.entries()).map(([date, vals]) => ({
     date, pH: Math.round((vals.ph.reduce((a, b) => a + b, 0) / vals.ph.length) * 10) / 10,
@@ -129,7 +141,17 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-xl border border-border bg-white p-5 shadow-sm">
-          <h3 className="mb-4 text-sm font-semibold text-gray-700">{t('trend7d')}</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-700">{t('trend7d')}</h3>
+            <div className="flex gap-1">
+              {(['hour','day','week','month'] as const).map(g => (
+                <button key={g} onClick={() => setGranularity(g)}
+                  className={`px-2 py-0.5 text-[10px] rounded ${granularity === g ? 'bg-[#00a65a] text-white' : 'bg-gray-100 text-gray-500'}`}>
+                  {{hour:'時',day:'日',week:'週',month:'月'}[g]}
+                </button>
+              ))}
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
