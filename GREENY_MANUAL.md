@@ -14,17 +14,20 @@ ESP32 (WSD-001) ──WSS──→ Cloudflare Worker (DO) ──→ D1 (SQLite)
 
 ### 總覽 `/`
 - KPI 卡片：在線設備、今日報警、pH、水溫、TDS
-- 7 日水質趨勢圖（需多天數據）
-- 設備狀態列表
+- 7 日水質趨勢圖，支援 **時/日/週/月** 切換
+- 設備狀態列表（pH、水溫、TDS、在線狀態、最後上報）
 
 ### 設備控制 `/device-control`
-- **R1/R2**：點擊切換開關，顯示執行狀態（等待命令 → 執行中 → 已執行）
+- **R1/R2**：點擊切換開關，顯示真實執行狀態
+  - 等待命令 → 等待回應 → 執行成功
+  - 狀態由 telemetry 實際確認，非假設
 - **pH Cal**：顯示當前校正值，輸入新值後點 Set 即時生效
-- 延遲約 1-3 秒（D1 隊列 + 1 秒心跳）
+- Relay 延遲約 1-3 秒（HTTP → D1 隊列 → 1s 心跳 → DO → WSS）
 
 ### 水質監測 `/water-quality`
+- 支援獨立裝置（無 rack）與水耕架裝置
+- 儀表板卡片：pH、EC、TDS、水溫
 - 24 小時趨勢圖（pH、TDS、水溫）
-- 儀表板卡片
 
 ## Relays 控制 API
 
@@ -82,11 +85,27 @@ ESP32 韌體: ESP-IDF v5.5
 即時通訊: WSS (telemetry 上行) + D1 隊列 (relay 下行)
 ```
 
-## 常用指令
+## 開發筆記
 
+### Relay 通訊流程
+```
+POST /relay → Worker → D1 relay_queue
+ESP32 1s ping → DO → 查 D1 relay_queue → WSS relay_cmd → ESP32 執行
+ESP32 telemetry → DO → D1 telemetry 表（含 relay 狀態）
+Dashboard 讀取 telemetry 確認 relay 已執行 → 更新 UI 狀態
+```
+
+### ESP32 韌體
+- 中位數濾波：pH/TDS 取 50 點排序中位數抗 WiFi 干擾
+- pH 濾波：>8.5 自動忽略（水耕不可能超過）
+- WSS 保持：1 秒 ping 防 Cloudflare edge idle timeout
+- WiFi Manager：STA 失敗自動開 AP（Greeny-Setup / 192.168.4.1）
+- Relay 預設 ON（R:11）
+
+### 部署
 ```bash
 # 燒錄韌體
-cd esp32-firmware && idf.py -p /dev/cu.usbserial-110 flash
+cd esp32-firmware && . ~/esp/esp-idf/export.sh && idf.py -p /dev/cu.usbserial-110 flash
 
 # 部署 Worker
 cd ws-worker && npx wrangler deploy
@@ -94,6 +113,6 @@ cd ws-worker && npx wrangler deploy
 # 部署前端
 npx vite build && npx wrangler pages deploy dist --project-name greeny
 
-# 查看 D1 資料
+# 查看 D1
 npx wrangler d1 execute greeny-db --remote --command "SELECT * FROM devices"
 ```
