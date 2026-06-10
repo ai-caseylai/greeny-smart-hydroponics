@@ -155,22 +155,31 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
     if (!isNaN(val) && val > 0) sendPhCal(d.id, val)
   }
 
-  const [relayStatus, setRelayStatus] = useState<'idle' | 'pending' | 'ok' | 'fail'>('idle')
+  const [relayStatus, setRelayStatus] = useState<'idle' | 'waiting' | 'ok'>('idle')
+  const [sentRelay, setSentRelay] = useState<{ num: number; val: number } | null>(null)
+
+  // 監測 telemetry 確認 relay 已執行
+  useEffect(() => {
+    if (!sentRelay || !latestT) return
+    const actual = sentRelay.num === 1 ? latestT.relay1 : latestT.relay2
+    if (actual === sentRelay.val) {
+      setRelayStatus('ok')
+      setTimeout(() => { setRelayStatus('idle'); setSentRelay(null) }, 2000)
+    }
+  }, [latestT?.relay1, latestT?.relay2])
 
   const toggleWithStatus = (num: number, value: boolean) => {
-    setRelayStatus('pending')
-    if (num === 1) { setRelay1(value); sendRelay(d.id, value ? 1 : 0, relay2 ? 1 : 0) }
-    else { setRelay2(value); sendRelay(d.id, relay1 ? 1 : 0, value ? 1 : 0) }
-    // 假設 4 秒後成功（等 DO 同步）
-    setTimeout(() => setRelayStatus('ok'), 4000)
-    setTimeout(() => setRelayStatus('idle'), 6000)
+    const v = value ? 1 : 0
+    if (num === 1) { setRelay1(value); sendRelay(d.id, v, relay2 ? 1 : 0) }
+    else { setRelay2(value); sendRelay(d.id, relay1 ? 1 : 0, v) }
+    setSentRelay({ num, val: v })
+    setRelayStatus('waiting')
   }
 
   const statusLabel: Record<string, { text: string; color: string }> = {
     idle: { text: '等待命令', color: 'text-gray-400' },
-    pending: { text: '執行中...', color: 'text-blue-500' },
-    ok: { text: '已執行', color: 'text-green-500' },
-    fail: { text: '執行失敗', color: 'text-red-500' },
+    waiting: { text: '等待回應...', color: 'text-blue-500' },
+    ok: { text: '執行成功', color: 'text-green-500' },
   }
 
   return (

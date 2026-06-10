@@ -221,8 +221,8 @@ export default function WaterQualityPage() {
         // 無 rack 但有獨立裝置 → 直接顯示裝置數據
         devices.length > 0 ? (
           <div className="space-y-4">
-            {devices.filter(d => telemetry.some(t => t.device_id === d.id)).map(d => {
-              const deviceTelemetry = telemetry.filter(t => t.device_id === d.id)
+            {devices.filter(d => data.some((t: any) => t.device_id === d.id)).map(d => {
+              const deviceTelemetry = data.filter((t: any) => t.device_id === d.id)
               return (
                 <div key={d.id} className="rounded-xl border border-border bg-white shadow-sm overflow-hidden">
                   <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-green-50 to-white border-b border-border">
