@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const { data: telemetry } = useTelemetry(undefined, 200, selectedOfficeId)
   const { racks } = useRacks(selectedOfficeId ?? undefined)
   const [selectedRackId, setSelectedRackId] = useState<number | null>(null)
+  const [granularity, setGranularity] = useState<'hour' | 'day' | 'week' | 'month'>('hour')
   const { t } = useTranslation(['dashboard', 'common'])
 
   // Build office name map from racks
@@ -74,8 +75,6 @@ export default function DashboardPage() {
     { label: t('waterTemp', { defaultValue: '水溫' }), value: stats?.avg_temp ? `${stats.avg_temp.toFixed(0)}°C` : '-', icon: Thermometer, color: '#E91E63' },
     { label: 'TDS', value: stats?.avg_ec != null ? stats.avg_ec.toFixed(0) + ' ppm' : '-', icon: Zap, color: '#FF9800' },
   ]
-
-  const [granularity, setGranularity] = useState<'hour' | 'day' | 'week' | 'month'>('hour')
 
   const trendMap = new Map<string, { ph: number[]; temp: number[]; tds: number[] }>()
   filteredTelemetry.forEach((t) => {
