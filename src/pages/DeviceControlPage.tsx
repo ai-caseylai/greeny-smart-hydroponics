@@ -167,16 +167,17 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
       setRelayStatus('ok')
       sentRelayRef.current = null
       const now = new Date().toLocaleTimeString()
+      const ackTime = new Date().toLocaleTimeString()
       setCmdLog(prev => {
         const updated = [...prev]
-        if (updated[0]) updated[0] = { ...updated[0], status: '✓ 執行成功' }
+        if (updated[0]) updated[0] = { ...updated[0], status: '✓ 執行成功', ackTime }
         return updated
       })
       setTimeout(() => setRelayStatus('idle'), 2000)
     }
   }, [latestT?.relay1, latestT?.relay2, latestT])
 
-  const [cmdLog, setCmdLog] = useState<{ time: string; action: string; status: string }[]>([])
+  const [cmdLog, setCmdLog] = useState<{ time: string; action: string; status: string; ackTime?: string }[]>([])
   const [showLog, setShowLog] = useState(false)
 
   const toggleWithStatus = (num: number, value: boolean) => {
@@ -267,7 +268,12 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
               <div key={i} className="flex items-center gap-2 text-[10px]">
                 <span className="text-gray-400 w-10">{entry.time}</span>
                 <span className="text-gray-600">{entry.action}</span>
-                <span className={entry.status.includes('✓') ? 'text-green-500' : 'text-blue-400'}>{entry.status}</span>
+                <span className={entry.status.includes('✓') ? 'text-green-500' : 'text-blue-400'}>
+                  {entry.status}
+                </span>
+                {entry.ackTime && (
+                  <span className="text-gray-400">ACK {entry.ackTime}</span>
+                )}
               </div>
             ))}
           </div>
