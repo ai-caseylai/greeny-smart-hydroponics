@@ -218,10 +218,55 @@ export default function WaterQualityPage() {
       {loading ? (
         <div className="text-sm text-gray-400">{t('common:actions.loading')}</div>
       ) : racksWithData.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center">
-          <Droplets className="mx-auto h-12 w-12 text-gray-300" />
-          <p className="mt-3 text-gray-500">{t('noData', { defaultValue: 'No rack data available' })}</p>
-        </div>
+        // 無 rack 但有獨立裝置 → 直接顯示裝置數據
+        devices.length > 0 ? (
+          <div className="space-y-4">
+            {devices.filter(d => telemetry.some(t => t.device_id === d.id)).map(d => {
+              const deviceTelemetry = telemetry.filter(t => t.device_id === d.id)
+              return (
+                <div key={d.id} className="rounded-xl border border-border bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-green-50 to-white border-b border-border">
+                    <div className="flex items-center gap-2">
+                      <Leaf className="h-4 w-4 text-[#2E7D32]" />
+                      <h3 className="text-sm font-semibold text-gray-800">{d.name}</h3>
+                      <span className="text-[10px] text-gray-400">({d.id})</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <GaugeCard label={t('ph')} value={deviceTelemetry[0]?.ph ?? null} unit="" icon={Droplets} color="#2196F3" min={0} max={14} optimal={[5.5, 7.0]} />
+                    <GaugeCard label={t('ec')} value={deviceTelemetry[0]?.ec ?? null} unit={t('unitEC')} icon={Zap} color="#4CAF50" min={0} max={3000} optimal={[800, 1500]} />
+                    <GaugeCard label="TDS" value={deviceTelemetry[0]?.ec ?? null} unit="ppm" icon={Zap} color="#FF9800" min={0} max={2000} optimal={[100, 1000]} />
+                    <GaugeCard label={t('waterTemp')} value={deviceTelemetry[0]?.water_temp ?? null} unit={t('unitTemp')} icon={Thermometer} color="#E91E63" min={0} max={50} optimal={[18, 28]} />
+                  </div>
+                  {/* 24h trend */}
+                  <div className="px-5 pb-4">
+                    <h4 className="mb-2 text-xs font-semibold text-gray-600">24H Trend</h4>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={[...deviceTelemetry].reverse().map(r => ({
+                        time: new Date(r.created_at * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+                        pH: r.ph, TDS: r.ec, Temp: r.water_temp,
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip />
+                        <Legend wrapperStyle={{ fontSize: 10 }} />
+                        <Line type="monotone" dataKey="pH" stroke="#2196F3" strokeWidth={1.5} dot={false} name="pH" />
+                        <Line type="monotone" dataKey="Temp" stroke="#E91E63" strokeWidth={1.5} dot={false} name="°C" />
+                        <Line type="monotone" dataKey="TDS" stroke="#FF9800" strokeWidth={1.5} dot={false} name="TDS" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center">
+            <Droplets className="mx-auto h-12 w-12 text-gray-300" />
+            <p className="mt-3 text-gray-500">{t('noData', { defaultValue: 'No data available' })}</p>
+          </div>
+        )
       ) : (
         <div className="space-y-4">
           {racksWithData.map(({ rack, telemetry: rackTelemetry, spectralData }) => (
