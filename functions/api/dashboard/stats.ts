@@ -14,29 +14,18 @@ export const onRequest: PagesFunction<Env>[] = [
 
     const bindOffice = (params: unknown[]) => officeId ? [...params, Number(officeId)] : params;
 
-    // "線上" = 最近 5 分鐘有 telemetry 或有 WSS 連線
-    const onlineQuery = officeId
-      ? `SELECT COUNT(DISTINCT d.id) as count FROM devices d
-         WHERE (d.last_seen > ? OR d.id IN (SELECT DISTINCT t.device_id FROM telemetry t WHERE t.created_at > ?))
-         AND (d.id IN (SELECT r.device_id FROM racks r WHERE r.office_id = ? AND r.device_id IS NOT NULL)
-              OR d.id NOT IN (SELECT r2.device_id FROM racks r2 WHERE r2.device_id IS NOT NULL))`
-      : `SELECT COUNT(DISTINCT d.id) as count FROM devices d
-         WHERE d.last_seen > ? OR d.id IN (SELECT DISTINCT t.device_id FROM telemetry t WHERE t.created_at > ?)`;
+    // 線上 = 最近 5 分鐘內有 telemetry
+    const onlineQuery = `SELECT COUNT(DISTINCT d.id) as count FROM devices d
+      WHERE EXISTS (SELECT 1 FROM telemetry t WHERE t.device_id = d.id AND t.created_at > ?)${officeJoin}`;
 
     const [onlineDevices, totalDevices, todayAlerts, avgPh, avgTemp, avgEc, statusDist, recentAlerts] = await Promise.all([
-      officeId
-        ? db.prepare(onlineQuery).bind(now - 300, now - 300, Number(officeId)).first<{ count: number }>()
-        : db.prepare(onlineQuery).bind(now - 300, now - 300).first<{ count: number }>(),
+      db.prepare(onlineQuery).bind(...bindOffice([now - 300])).first<{ count: number }>(),
       db.prepare(`SELECT COUNT(*) as count FROM devices d WHERE 1=1${officeJoin}`)
         .bind(...bindOffice([])).first<{ count: number }>(),
-      db.prepare(`SELECT COUNT(*) as count FROM alerts WHERE created_at >= ?`)
-        .bind(todayStart).first<{ count: number }>(),
-      db.prepare(`SELECT AVG(t.ph) as avg FROM telemetry t WHERE t.created_at >= ?`)
-        .bind(todayStart).first<{ avg: number }>(),
-      db.prepare(`SELECT AVG(t.water_temp) as avg FROM telemetry t WHERE t.created_at >= ?`)
-        .bind(todayStart).first<{ avg: number }>(),
-      db.prepare(`SELECT AVG(t.ec) as avg FROM telemetry t WHERE t.created_at >= ?`)
-        .bind(todayStart).first<{ avg: number }>(),
+      db.prepare(`SELECT COUNT(*) as count FROM alerts WHERE created_at >= ?`).bind(todayStart).first<{ count: number }>(),
+      db.prepare(`SELECT AVG(t.ph) as avg FROM telemetry t WHERE t.created_at >= ?`).bind(todayStart).first<{ avg: number }>(),
+      db.prepare(`SELECT AVG(t.water_temp) as avg FROM telemetry t WHERE t.created_at >= ?`).bind(todayStart).first<{ avg: number }>(),
+      db.prepare(`SELECT AVG(t.ec) as avg FROM telemetry t WHERE t.created_at >= ? AND t.ec > 0`).bind(todayStart).first<{ avg: number }>(),
       db.prepare(`SELECT d.status, COUNT(*) as count FROM devices d WHERE 1=1${officeJoin} GROUP BY d.status`)
         .bind(...bindOffice([])).all(),
       db.prepare(`SELECT a.*, d.name as device_name FROM alerts a LEFT JOIN devices d ON a.device_id = d.id

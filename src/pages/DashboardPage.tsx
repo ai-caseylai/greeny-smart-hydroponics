@@ -168,7 +168,6 @@ export default function DashboardPage() {
                 <th className="px-4 py-3">{t('company', { defaultValue: 'Company' })}</th>
                 <th className="px-4 py-3">{t('location')}</th>
                 <th className="px-4 py-3">pH</th>
-                <th className="px-4 py-3">EC (μS/cm)</th>
                 <th className="px-4 py-3">°C</th>
                 <th className="px-4 py-3">TDS</th>
                 <th className="px-4 py-3">{t('common:status.online', { defaultValue: 'Status' })}</th>
@@ -186,7 +185,6 @@ export default function DashboardPage() {
                     <td className="px-4 py-3 text-gray-600">{officeName}</td>
                     <td className="px-4 py-3 text-gray-600">{d.location}</td>
                     <td className="px-4 py-3">{lt?.ph?.toFixed(1) || '-'}</td>
-                    <td className="px-4 py-3">{lt?.ec != null ? lt.ec.toFixed(1) : '-'}</td>
                     <td className="px-4 py-3">{lt?.water_temp?.toFixed(1) || '-'}</td>
                     <td className="px-4 py-3">{lt?.ec != null ? lt.ec.toFixed(0) : '-'}</td>
                     <td className="px-4 py-3"><span className="flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${statusColors[d.status] || 'bg-gray-400'}`} />{statusLabels[d.status] || d.status}</span></td>

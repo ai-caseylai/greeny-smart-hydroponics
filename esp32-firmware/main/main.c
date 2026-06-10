@@ -473,8 +473,8 @@ static void handle_incoming_message(const char *data, int len)
 static void wifi_handler(void *a, esp_event_base_t b, int32_t id, void *d)
 {
     if (b == WIFI_EVENT) {
-        if (id == WIFI_EVENT_STA_START && !s_ap_mode) esp_wifi_connect();
-        else if (id == WIFI_EVENT_STA_DISCONNECTED && !s_ap_mode) { s_wifi_connected = false; strcpy(s_ip_str, "---"); esp_wifi_connect(); }
+        if (id == WIFI_EVENT_STA_START) esp_wifi_connect();
+        else if (id == WIFI_EVENT_STA_DISCONNECTED) { s_wifi_connected = false; strcpy(s_ip_str, "---"); esp_wifi_connect(); }
     } else if (b == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         snprintf(s_ip_str, sizeof(s_ip_str), IPSTR, IP2STR(&((ip_event_got_ip_t *)d)->ip_info.ip));
         s_wifi_connected = true;
@@ -519,15 +519,19 @@ static void wifi_init_all(void)
     ESP_ERROR_CHECK(esp_wifi_start());
     esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (netif) {
-        esp_netif_dns_info_t dns;
-        esp_netif_get_dns_info(netif, ESP_NETIF_DNS_FALLBACK, &dns);
-        if (dns.ip.u_addr.ip4.addr == 0) {
-            dns.ip.type = ESP_IPADDR_TYPE_V4;
-            dns.ip.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
-            esp_netif_set_dns_info(netif, ESP_NETIF_DNS_FALLBACK, &dns);
-        }
+        // 強制設定主要 DNS 為 Cloudflare (1.1.1.1)
+        esp_netif_dns_info_t dns = { .ip = { .type = ESP_IPADDR_TYPE_V4, .u_addr = { .ip4 = { .addr = esp_ip4addr_aton("1.1.1.1") } } } };
+        esp_netif_set_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns);
+        ESP_LOGI(TAG, "DNS set to 1.1.1.1");
     }
     oled_write_line(7, "WiFi connecting..."); oled_flush();
+    // 等待連線結果
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(15000));
+    if (bits & WIFI_CONNECTED_BIT) {
+        oled_write_line(7, "WiFi Connected!"); oled_flush();
+    } else {
+        oled_write_line(7, "WiFi FAILED!"); oled_flush();
+    }
 }
 
 // ============================================================
