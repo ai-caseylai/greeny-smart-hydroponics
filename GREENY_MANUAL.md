@@ -20,9 +20,10 @@ ESP32 (WSD-001) ──WSS──→ Cloudflare Worker (DO) ──→ D1 (SQLite)
 ### 設備控制 `/device-control`
 - **R1/R2**：點擊切換開關，顯示真實執行狀態
   - 等待命令 → 等待回應 → 執行成功
-  - 狀態由 telemetry 實際確認，非假設
+  - 狀態由 telemetry 實際確認
+- **📋 命令日誌**：點擊展開，顯示歷史命令及 ACK 時間
+  - 資料存入 D1 `relay_log` 表，跨工作階段保留
 - **pH Cal**：顯示當前校正值，輸入新值後點 Set 即時生效
-- Relay 延遲約 1-3 秒（HTTP → D1 隊列 → 1s 心跳 → DO → WSS）
 
 ### 水質監測 `/water-quality`
 - 支援獨立裝置（無 rack）與水耕架裝置
@@ -89,10 +90,11 @@ ESP32 韌體: ESP-IDF v5.5
 
 ### Relay 通訊流程
 ```
-POST /relay → Worker → D1 relay_queue
+POST /relay → Worker → D1 relay_queue + relay_log (已發送)
 ESP32 1s ping → DO → 查 D1 relay_queue → WSS relay_cmd → ESP32 執行
+ESP32 → WSS relay_ack → DO → relay_log (更新為已執行)
 ESP32 telemetry → DO → D1 telemetry 表（含 relay 狀態）
-Dashboard 讀取 telemetry 確認 relay 已執行 → 更新 UI 狀態
+Dashboard 讀取 relay_log API → 顯示命令日誌
 ```
 
 ### ESP32 韌體
