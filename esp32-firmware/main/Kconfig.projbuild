@@ -22,7 +22,7 @@ menu "Greeny Sensor Configuration"
 
     config SEND_INTERVAL_SEC
         int "Telemetry send interval (seconds)"
-        default 60
+        default 30
 
     config USE_WEBSOCKET
         bool "Use WebSocket mode (uncheck for HTTPS POST only)"

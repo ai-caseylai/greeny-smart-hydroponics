@@ -390,7 +390,7 @@ static void relay_init_all(void)
                         .pull_up_en = GPIO_PULLUP_DISABLE, .pull_down_en = GPIO_PULLDOWN_DISABLE,
                         .intr_type = GPIO_INTR_DISABLE };
     gpio_config(&c);
-    for (int i = 0; i < RELAY_COUNT; i++) { s_relay[i] = 0; gpio_set_level(RELAY_GPIOS[i], 0); }
+    for (int i = 0; i < RELAY_COUNT; i++) { s_relay[i] = 1; gpio_set_level(RELAY_GPIOS[i], 1); }
 }
 
 static void set_relay(int idx, int val)
@@ -418,7 +418,7 @@ static char *build_telemetry_ws_json(void)
         char key[8]; snprintf(key, sizeof(key), "relay%d", i + 1);
         cJSON_AddNumberToObject(r, key, s_relay[i]);
     }
-    cJSON_AddNumberToObject(r, "ts_ms", (double)(xTaskGetTickCount() * portTICK_PERIOD_MS));
+    // ts_ms 由 Worker 端 Date.now() 填入
     char *j = cJSON_PrintUnformatted(r); cJSON_Delete(r); return j;
 }
 #else
@@ -507,7 +507,13 @@ static void wifi_init_all(void)
         strlcpy((char *)w.sta.ssid, CONFIG_WIFI_SSID, sizeof(w.sta.ssid));
         strlcpy((char *)w.sta.password, CONFIG_WIFI_PASSWORD, sizeof(w.sta.password));
     }
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &w));
+    // AP+STA mode — AP always on for WiFi config
+    s_ap_mode = true;
+    esp_netif_create_default_wifi_ap();
+    wifi_config_t ap_cfg = { .ap = { .ssid = "Greeny-Setup", .password = "", .ssid_len = 0, .authmode = WIFI_AUTH_OPEN, .max_connection = 4 } };
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &w));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_cfg));
     ESP_ERROR_CHECK(esp_wifi_start());
     esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (netif) {
@@ -517,19 +523,9 @@ static void wifi_init_all(void)
             dns.ip.type = ESP_IPADDR_TYPE_V4;
             dns.ip.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
             esp_netif_set_dns_info(netif, ESP_NETIF_DNS_FALLBACK, &dns);
-            ESP_LOGI(TAG, "DNS fallback set to 1.1.1.1");
         }
     }
     oled_write_line(7, "WiFi connecting..."); oled_flush();
-    if (!(xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(15000)) & WIFI_CONNECTED_BIT)) {
-        oled_write_line(7, "WiFi FAILED!"); oled_flush();
-        s_ap_mode = true;
-        esp_netif_create_default_wifi_ap();
-        wifi_config_t ap_cfg = { .ap = { .ssid = "Greeny-Setup", .password = "", .ssid_len = 0, .authmode = WIFI_AUTH_OPEN, .max_connection = 4 } };
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_cfg));
-        strcpy(s_ip_str, "192.168.4.1");
-    }
 }
 
 // ============================================================
@@ -710,7 +706,7 @@ void app_main(void)
     if (r == ESP_ERR_NVS_NO_FREE_PAGES || r == ESP_ERR_NVS_NEW_VERSION_FOUND) { nvs_flash_erase(); nvs_flash_init(); }
     adc_init_all(); relay_init_all(); ds18b20_init(); oled_setup();
     wifi_init_all();
-    if (s_ap_mode) { wifi_manager_start(); }
+    wifi_manager_start();  // WiFi config AP always on
     xTaskCreate(oled_task, "oled", 3072, NULL, 3, NULL);
 #ifdef CONFIG_USE_WEBSOCKET
     xTaskCreate(telemetry_ws_task, "ws_tel", 8192, NULL, 5, NULL);

@@ -5,6 +5,8 @@
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_http_server.h"
+#include "esp_wifi.h"
+#include "cJSON.h"
 
 
 
@@ -17,20 +19,40 @@ static const char WIFI_HTML[] =
 "<title>Greeny WiFi Setup</title>"
 "<style>body{font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;"
 "justify-content:center;align-items:center;min-height:100vh;margin:0}"
-"form{background:#1e293b;padding:30px;border-radius:12px;width:320px}"
+"form{background:#1e293b;padding:30px;border-radius:12px;width:360px}"
 "h2{color:#38bdf8;text-align:center}label{display:block;margin-top:12px;font-size:14px;color:#94a3b8}"
-"input{width:100%;padding:10px;margin-top:4px;border:1px solid #334155;border-radius:6px;"
+"input,select{width:100%;padding:10px;margin-top:4px;border:1px solid #334155;border-radius:6px;"
 "background:#0f172a;color:#e2e8f0;font-size:14px;box-sizing:border-box}"
 "button{width:100%;padding:12px;margin-top:20px;background:#00a65a;border:none;border-radius:6px;"
 "color:#fff;font-size:16px;cursor:pointer}"
-"button:hover{background:#008a4a}.msg{text-align:center;font-size:12px;margin-top:10px;color:#94a3b8}"
+"button:hover{background:#008a4a}"
+"button.scan{background:#334155;margin-top:4px;font-size:12px;padding:8px}"
+"button.scan:hover{background:#475569}"
+".msg{text-align:center;font-size:12px;margin-top:10px;color:#94a3b8}"
 "</style></head><body><form method='POST' action='/save'>"
 "<h2>Greeny WiFi Setup</h2>"
-"<label>SSID</label><input name='ssid' placeholder='WiFi name' required>"
-"<label>Password</label><input name='pass' type='password' placeholder='WiFi password'>"
+"<label>SSID</label>"
+"<input id='ssid' name='ssid' list='ssid-list' placeholder='Select or type WiFi name' required>"
+"<datalist id='ssid-list'></datalist>"
+"<button type='button' class='scan' onclick='scanWiFi()'>Scan Networks</button>"
+"<label>Password</label><input name='pass' id='pass' type='password' placeholder='WiFi password'>"
 "<button type='submit'>Save & Reboot</button>"
 "<p class='msg'>ESP32 will reboot with new settings</p>"
-"</form></body></html>";
+"</form>"
+"<script>"
+"async function scanWiFi(){"
+"var b=document.querySelector('.scan');b.textContent='Scanning...';b.disabled=true;"
+"try{"
+"var r=await fetch('/scan');var data=await r.json();"
+"var list=document.getElementById('ssid-list');list.innerHTML='';"
+"data.forEach(function(s){var o=document.createElement('option');o.value=s;list.appendChild(o);});"
+"var sel=document.getElementById('ssid');"
+"if(data.length>0){sel.value=data[0];sel.focus();}"
+"}catch(e){}"
+"b.textContent='Scan Networks';b.disabled=false;"
+"}"
+"scanWiFi();"
+"</script></body></html>";
 
 static const char WIFI_OK_HTML[] =
 "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -95,6 +117,28 @@ static esp_err_t wifi_save_handler(httpd_req_t *req) {
     return ESP_FAIL;
 }
 
+static esp_err_t wifi_scan_handler(httpd_req_t *req) {
+    wifi_scan_config_t scan_cfg = { .ssid = NULL, .bssid = NULL, .channel = 0, .show_hidden = false };
+    esp_wifi_scan_start(&scan_cfg, true);
+    uint16_t ap_count = 0;
+    esp_wifi_scan_get_ap_num(&ap_count);
+    wifi_ap_record_t *ap_records = malloc(sizeof(wifi_ap_record_t) * ap_count);
+    esp_wifi_scan_get_ap_records(&ap_count, ap_records);
+
+    cJSON *arr = cJSON_CreateArray();
+    for (int i = 0; i < ap_count; i++) {
+        cJSON_AddItemToArray(arr, cJSON_CreateString((const char *)ap_records[i].ssid));
+    }
+    char *json = cJSON_PrintUnformatted(arr);
+    cJSON_Delete(arr);
+    free(ap_records);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, json, HTTPD_RESP_USE_STRLEN);
+    cJSON_free(json);
+    return ESP_OK;
+}
+
 void wifi_manager_start(void) {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     httpd_handle_t server = NULL;
@@ -102,8 +146,10 @@ void wifi_manager_start(void) {
 
     httpd_uri_t uri_get = { .uri = "/", .method = HTTP_GET, .handler = wifi_get_handler };
     httpd_uri_t uri_save = { .uri = "/save", .method = HTTP_POST, .handler = wifi_save_handler };
+    httpd_uri_t uri_scan = { .uri = "/scan", .method = HTTP_GET, .handler = wifi_scan_handler };
     httpd_register_uri_handler(server, &uri_get);
     httpd_register_uri_handler(server, &uri_save);
+    httpd_register_uri_handler(server, &uri_scan);
 
     ESP_LOGI("GREENY", "WiFi Manager: http://192.168.4.1");
 }

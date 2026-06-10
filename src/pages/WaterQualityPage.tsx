@@ -48,7 +48,7 @@ function RackCard({ rackName, deviceName, telemetry, spectralData }: {
 
   const chartData = [...telemetry].reverse().map((r) => ({
     time: new Date(r.ts_ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
-    pH: r.ph, EC: r.ec, Temp: r.water_temp, NDVI: r.ndvi,
+    pH: r.ph, EC: r.ec, TDS: r.ec, Temp: r.water_temp,
   }))
 
   const [page, setPage] = useState(0)
@@ -81,7 +81,7 @@ function RackCard({ rackName, deviceName, telemetry, spectralData }: {
         <GaugeCard label={t('ph')} value={latest?.ph ?? null} unit="" icon={Droplets} color="#2196F3" min={0} max={14} optimal={[5.5, 7.0]} />
         <GaugeCard label={t('ec')} value={latest?.ec ?? null} unit={t('unitEC')} icon={Zap} color="#4CAF50" min={0} max={3000} optimal={[800, 1500]} />
         <GaugeCard label={t('waterTemp')} value={latest?.water_temp ?? null} unit={t('unitTemp')} icon={Thermometer} color="#E91E63" min={0} max={50} optimal={[18, 28]} />
-        <GaugeCard label="NDVI" value={latest?.ndvi ?? null} unit="" icon={Leaf} color="#66BB6A" min={-1} max={1} optimal={[0.3, 0.8]} />
+        <GaugeCard label="TDS" value={latest?.ec ?? null} unit="ppm" icon={Zap} color="#66BB6A" min={0} max={2000} optimal={[100, 1000]} />
       </div>
 
       {/* Spectrum chart */}
@@ -114,6 +114,7 @@ function RackCard({ rackName, deviceName, telemetry, spectralData }: {
               <Line type="monotone" dataKey="pH" stroke="#2196F3" strokeWidth={1.5} dot={false} name="pH" />
               <Line type="monotone" dataKey="Temp" stroke="#E91E63" strokeWidth={1.5} dot={false} name="°C" />
               <Line type="monotone" dataKey="EC" stroke="#4CAF50" strokeWidth={1.5} dot={false} name="EC" />
+              <Line type="monotone" dataKey="TDS" stroke="#FF9800" strokeWidth={1.5} dot={false} name="TDS" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -141,8 +142,8 @@ function RackCard({ rackName, deviceName, telemetry, spectralData }: {
             <tr className="border-b border-border bg-gray-50 text-left text-gray-500">
               <th className="px-4 py-2">pH</th>
               <th className="px-4 py-2">EC</th>
+              <th className="px-4 py-2">TDS</th>
               <th className="px-4 py-2">°C</th>
-              <th className="px-4 py-2">NDVI</th>
               <th className="px-4 py-2">%</th>
               <th className="px-4 py-2">{t('time')}</th>
             </tr>
@@ -151,9 +152,9 @@ function RackCard({ rackName, deviceName, telemetry, spectralData }: {
             {pageData.map((r) => (
               <tr key={r.id} className="border-b border-border/30 hover:bg-gray-50/50">
                 <td className="px-4 py-2">{r.ph.toFixed(1)}</td>
-                <td className="px-4 py-2">{r.ec}</td>
-                <td className="px-4 py-2">{r.water_temp.toFixed(1)}</td>
-                <td className="px-4 py-2">{r.ndvi.toFixed(2)}</td>
+                <td className="px-4 py-2">{r.ec?.toFixed(1)}</td>
+                <td className="px-4 py-2">{r.ec?.toFixed(0)}</td>
+                <td className="px-4 py-2">{r.water_temp?.toFixed(1)}</td>
                 <td className="px-4 py-2">{r.water_level}%</td>
                 <td className="px-4 py-2 text-gray-400">{formatTime(r.created_at)}</td>
               </tr>
