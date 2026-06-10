@@ -343,7 +343,9 @@ static float read_tds(void)
     float coeff = 1.0f + 0.02f * (T - 25.0f);
     float v = volt / coeff;
     float tds = (133.42f * v * v * v - 255.86f * v * v + 857.39f * v) * 0.5f;
-    if (tds > 2000.0f) return s_last_good_tds;
+    static int cnt = 0;
+    if (++cnt % 10 == 0) ESP_LOGI(TAG, "TDS raw=%d volt=%.3fV span=%d tds=%.0f", raw, volt, span, tds);
+    if (tds > 5000.0f) return s_last_good_tds;
     s_last_good_tds = tds;
     return tds;
 }

@@ -178,7 +178,7 @@ export default function DashboardPage() {
             <tbody>
               {filteredDevices.map((d) => {
                 const lt = filteredTelemetry.find((t) => t.device_id === d.id)
-                const officeName = deviceOfficeMap.get(d.id) || (d as any).office_name || '-'
+                const officeName = d.id === 'WSD-001' ? 'AquaGreen' : (deviceOfficeMap.get(d.id) || (d as any).office_name || '-')
                 return (
                   <tr key={d.id} className="border-b border-border/50 hover:bg-gray-50/50">
                     <td className="px-4 py-3 font-mono text-xs text-gray-600">{d.id}</td>
