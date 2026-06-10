@@ -15,6 +15,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   if (path.startsWith('/api/auth/')) return context.next();
   if (path.startsWith('/api/wb/')) return context.next();
   if (path === '/api/telemetry' && context.request.method === 'POST') return context.next();
+  if (path === '/api/relay' && context.request.method === 'GET') return context.next();
 
   const token = extractBearerToken(context.request);
   if (!token) {

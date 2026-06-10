@@ -91,11 +91,16 @@ export function useWebSocket(officeId: number | null) {
   }, [])
 
   const sendRelay = useCallback((deviceId: string, relay1: number, relay2: number, relay3?: number, relay4?: number) => {
+    // HTTP relay (primary — 走 Pages Function，不依賴 DO)
+    const apiBase = import.meta.env.VITE_API_BASE || '/api'
+    fetch(`${apiBase}/relay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+      body: JSON.stringify({ device_id: deviceId, relay1, relay2 }),
+    }).catch(() => {})
+    // WSS relay (fallback)
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      const msg: any = { type: 'relay', device_id: deviceId, relay1, relay2 }
-      if (relay3 !== undefined) msg.relay3 = relay3
-      if (relay4 !== undefined) msg.relay4 = relay4
-      wsRef.current.send(JSON.stringify(msg))
+      wsRef.current.send(JSON.stringify({ type: 'relay', device_id: deviceId, relay1, relay2 }))
     }
   }, [])
 

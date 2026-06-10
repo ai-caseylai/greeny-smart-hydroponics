@@ -13,12 +13,29 @@ export class DeviceHub {
     const url = new URL(request.url);
 
     if (request.headers.get('Upgrade') !== 'websocket') {
-      // REST endpoint for getting connected device list
+      // REST endpoint: device list
       if (url.pathname === '/devices') {
         return new Response(JSON.stringify({
           devices: Array.from(this.devices.keys()),
           dashboards: this.dashboards.size,
         }), { headers: { 'Content-Type': 'application/json' } });
+      }
+      // REST endpoint: relay command (直接 HTTP)
+      if (url.pathname === '/relay-cmd' && request.method === 'POST') {
+        const body = await request.json() as { device_id?: string; relay1?: number; relay2?: number };
+        if (body.device_id) {
+          const ws = this.devices.get(body.device_id);
+          if (ws) {
+            ws.send(JSON.stringify({
+              type: 'relay_cmd',
+              relay1: body.relay1,
+              relay2: body.relay2,
+            }));
+            return new Response(JSON.stringify({ ok: true, device_id: body.device_id }), { headers: { 'Content-Type': 'application/json' } });
+          }
+          return new Response(JSON.stringify({ error: 'device not connected' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({ error: 'device_id required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
       return new Response('Expected WebSocket upgrade', { status: 400 });
     }

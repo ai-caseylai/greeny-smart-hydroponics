@@ -27,7 +27,7 @@ export default function DeviceControlPage() {
   const { selectedOfficeId } = useOffice()
   const { devices, loading } = useDevices(selectedOfficeId)
   const { data: telemetry } = useTelemetry(undefined, 200, selectedOfficeId)
-  const { connected: wsConnected, on, sendRelay, sendPhCal } = useWebSocket(9) // WSD-001 在 office 9
+  const { connected: wsConnected, on, sendRelay, sendPhCal } = useWebSocket(99)
   const { t } = useTranslation('devices')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)

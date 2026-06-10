@@ -683,6 +683,35 @@ static void ws_reader_task(void *pv)
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
+static void relay_checker_task(void *pv) {
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(2000));  // 每 2 秒檢查
+        if (!s_wifi_connected) continue;
+        esp_http_client_config_t rc = { .url = "https://greenie.techforliving.net/api/relay?device_id=" CONFIG_DEVICE_ID, .method = HTTP_METHOD_GET, .timeout_ms = 3000, .crt_bundle_attach = esp_crt_bundle_attach };
+        esp_http_client_handle_t rq = esp_http_client_init(&rc);
+        if (esp_http_client_perform(rq) == ESP_OK && esp_http_client_get_status_code(rq) == 200) {
+            char buf[256]; int rlen = esp_http_client_read(rq, buf, sizeof(buf) - 1);
+            if (rlen > 0) {
+                buf[rlen] = 0;
+                cJSON *cmd = cJSON_Parse(buf);
+                if (cmd) {
+                    cJSON *r1 = cJSON_GetObjectItem(cmd, "relay1");
+                    cJSON *r2 = cJSON_GetObjectItem(cmd, "relay2");
+                    if ((r1 && cJSON_IsNumber(r1)) || (r2 && cJSON_IsNumber(r2))) {
+                        ESP_LOGI(TAG, "Relay HTTP cmd: R1=%d R2=%d", r1 ? r1->valueint : -1, r2 ? r2->valueint : -1);
+                        for (int i = 0; i < RELAY_COUNT; i++) {
+                            char key[8]; snprintf(key, sizeof(key), "relay%d", i + 1);
+                            cJSON *v = cJSON_GetObjectItem(cmd, key);
+                            if (v && cJSON_IsNumber(v)) set_relay(i, v->valueint);
+                        }
+                    }
+                    cJSON_Delete(cmd);
+                }
+            }
+        }
+        esp_http_client_cleanup(rq);
+    }
+}
 #endif // CONFIG_USE_WEBSOCKET
 
 // ============================================================
@@ -695,7 +724,7 @@ static void oled_task(void *pv) {
         s_tds = read_tds();
         read_temp_sensor();
         oled_update_display();
-        if (++tick % 30 == 0) // 每 30 秒 log
+        if (++tick % 30 == 0)
             ESP_LOGI(TAG, "OLED pH=%.2f TDS=%.0f T=%.1f R=%d%d",
                      s_ph, s_tds, s_water_temp, s_relay[0], s_relay[1]);
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -717,6 +746,7 @@ void app_main(void)
 #ifdef CONFIG_USE_WEBSOCKET
     xTaskCreate(telemetry_ws_task, "ws_tel", 8192, NULL, 5, NULL);
     xTaskCreate(ws_reader_task, "ws_rdr", 4096, NULL, 4, NULL);
+    xTaskCreate(relay_checker_task, "relay_ck", 8192, NULL, 3, NULL);
 #else
     xTaskCreate(telemetry_task, "http_tel", 8192, NULL, 5, NULL);
 #endif
