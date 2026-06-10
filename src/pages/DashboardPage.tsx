@@ -78,13 +78,15 @@ export default function DashboardPage() {
   const trendMap = new Map<string, { ph: number[]; temp: number[] }>()
   filteredTelemetry.forEach((t) => {
     const day = new Date(t.ts_ms).toLocaleDateString()
-    if (!trendMap.has(day)) trendMap.set(day, { ph: [], temp: [] })
+    if (!trendMap.has(day)) trendMap.set(day, { ph: [], temp: [], tds: [] })
     trendMap.get(day)!.ph.push(t.ph)
     trendMap.get(day)!.temp.push(t.water_temp)
+    trendMap.get(day)!.tds.push(t.ec)
   })
   const trendData = Array.from(trendMap.entries()).map(([date, vals]) => ({
     date, pH: Math.round((vals.ph.reduce((a, b) => a + b, 0) / vals.ph.length) * 10) / 10,
     Temp: Math.round((vals.temp.reduce((a, b) => a + b, 0) / vals.temp.length) * 10) / 10,
+    TDS: Math.round(vals.tds.reduce((a, b) => a + b, 0) / vals.tds.length),
   }))
 
   const distData = stats?.device_distribution?.map((d) => ({
@@ -136,6 +138,7 @@ export default function DashboardPage() {
               <Tooltip />
               <Line type="monotone" dataKey="pH" stroke="#2196F3" strokeWidth={2} dot={{ r: 4 }} name="pH" />
               <Line type="monotone" dataKey="Temp" stroke="#E91E63" strokeWidth={2} dot={{ r: 4 }} name="°C" />
+              <Line type="monotone" dataKey="TDS" stroke="#FF9800" strokeWidth={2} dot={{ r: 4 }} name="TDS" />
             </LineChart>
           </ResponsiveContainer>
         </div>
