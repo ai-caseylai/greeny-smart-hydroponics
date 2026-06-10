@@ -177,6 +177,7 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
   }, [latestT?.relay1, latestT?.relay2, latestT])
 
   const [cmdLog, setCmdLog] = useState<{ time: string; action: string; status: string }[]>([])
+  const [showLog, setShowLog] = useState(false)
 
   const toggleWithStatus = (num: number, value: boolean) => {
     const v = value ? 1 : 0
@@ -255,12 +256,14 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
         <span className={`text-[10px] ml-auto ${statusLabel[relayStatus].color}`}>{statusLabel[relayStatus].text}</span>
       </div>
 
-      {/* Command log */}
-      {cmdLog.length > 0 && (
-        <div className="pt-2 border-t border-border/50 mb-2">
-          <p className="text-[10px] text-gray-400 mb-1">命令日誌</p>
-          <div className="max-h-24 overflow-y-auto space-y-0.5">
-            {cmdLog.slice(0, 5).map((entry, i) => (
+      {/* Command log toggle */}
+      <div className="pt-2 border-t border-border/50 mb-2">
+        <button onClick={() => setShowLog(!showLog)} className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600">
+          📋 命令日誌 {cmdLog.length > 0 && `(${cmdLog.length})`}
+        </button>
+        {showLog && cmdLog.length > 0 && (
+          <div className="mt-1 max-h-24 overflow-y-auto space-y-0.5">
+            {cmdLog.slice(0, 10).map((entry, i) => (
               <div key={i} className="flex items-center gap-2 text-[10px]">
                 <span className="text-gray-400 w-10">{entry.time}</span>
                 <span className="text-gray-600">{entry.action}</span>
@@ -268,8 +271,11 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+        {showLog && cmdLog.length === 0 && (
+          <p className="text-[10px] text-gray-400 mt-1">暫無命令記錄</p>
+        )}
+      </div>
 
       {/* pH Calibration */}
       <div className="pt-2 border-t border-border/50 mb-2">
