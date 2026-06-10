@@ -32,6 +32,23 @@ export const onRequest: PagesFunction<Env>[] = [
       return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
     }
 
+    if (c.request.method === 'DELETE') {
+      // 刪除關聯資料
+      await db.prepare('DELETE FROM telemetry WHERE device_id = ?').bind(id).run();
+      await db.prepare('DELETE FROM alerts WHERE device_id = ?').bind(id).run();
+      // 處理 racks 關聯
+      const racks = await db.prepare('SELECT id FROM racks WHERE device_id = ?').bind(id).all<{id: number}>();
+      for (const rack of racks.results) {
+        await db.prepare('DELETE FROM rack_vegetables WHERE rack_id = ?').bind(rack.id).run();
+        await db.prepare('DELETE FROM rack_environment WHERE rack_id = ?').bind(rack.id).run();
+        await db.prepare('DELETE FROM automations WHERE rack_id = ?').bind(rack.id).run();
+      }
+      await db.prepare('DELETE FROM racks WHERE device_id = ?').bind(id).run();
+      // 刪除裝置
+      await db.prepare('DELETE FROM devices WHERE id = ?').bind(id).run();
+      return new Response(JSON.stringify({ ok: true, deleted: id }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: { 'Content-Type': 'application/json' } });
   }
 ];

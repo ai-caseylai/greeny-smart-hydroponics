@@ -22,6 +22,8 @@
 #include "esp_http_client.h"
 
 static const char *TAG = "GREENY";
+extern void wifi_manager_start(void);
+extern bool s_ap_mode;
 
 // ===== I2C / OLED =====
 #define OLED_I2C_PORT       I2C_NUM_0
@@ -222,7 +224,7 @@ static void oled_setup(void)
     oled_flush();
 }
 
-static float s_ph_cal = 16.43f;
+static float s_ph_cal = 18.07f;
 
 // ============================================================
 // OLED 顯示更新
@@ -469,8 +471,8 @@ static void handle_incoming_message(const char *data, int len)
 static void wifi_handler(void *a, esp_event_base_t b, int32_t id, void *d)
 {
     if (b == WIFI_EVENT) {
-        if (id == WIFI_EVENT_STA_START) esp_wifi_connect();
-        else if (id == WIFI_EVENT_STA_DISCONNECTED) { s_wifi_connected = false; strcpy(s_ip_str, "---"); esp_wifi_connect(); }
+        if (id == WIFI_EVENT_STA_START && !s_ap_mode) esp_wifi_connect();
+        else if (id == WIFI_EVENT_STA_DISCONNECTED && !s_ap_mode) { s_wifi_connected = false; strcpy(s_ip_str, "---"); esp_wifi_connect(); }
     } else if (b == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         snprintf(s_ip_str, sizeof(s_ip_str), IPSTR, IP2STR(&((ip_event_got_ip_t *)d)->ip_info.ip));
         s_wifi_connected = true;
@@ -488,8 +490,23 @@ static void wifi_init_all(void)
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_handler, NULL, &i1));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_handler, NULL, &i2));
     wifi_config_t w = {0};
-    strlcpy((char *)w.sta.ssid, CONFIG_WIFI_SSID, sizeof(w.sta.ssid));
-    strlcpy((char *)w.sta.password, CONFIG_WIFI_PASSWORD, sizeof(w.sta.password));
+    char saved_ssid[33] = {0}, saved_pass[65] = {0};
+    nvs_handle_t nvs;
+    if (nvs_open("greeny", NVS_READONLY, &nvs) == ESP_OK) {
+        size_t len = sizeof(saved_ssid);
+        nvs_get_str(nvs, "ssid", saved_ssid, &len);
+        len = sizeof(saved_pass);
+        nvs_get_str(nvs, "pass", saved_pass, &len);
+        nvs_close(nvs);
+    }
+    if (saved_ssid[0]) {
+        strlcpy((char *)w.sta.ssid, saved_ssid, sizeof(w.sta.ssid));
+        strlcpy((char *)w.sta.password, saved_pass, sizeof(w.sta.password));
+        ESP_LOGI(TAG, "Using saved WiFi: %s", saved_ssid);
+    } else {
+        strlcpy((char *)w.sta.ssid, CONFIG_WIFI_SSID, sizeof(w.sta.ssid));
+        strlcpy((char *)w.sta.password, CONFIG_WIFI_PASSWORD, sizeof(w.sta.password));
+    }
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &w));
     ESP_ERROR_CHECK(esp_wifi_start());
     esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
@@ -506,6 +523,12 @@ static void wifi_init_all(void)
     oled_write_line(7, "WiFi connecting..."); oled_flush();
     if (!(xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(15000)) & WIFI_CONNECTED_BIT)) {
         oled_write_line(7, "WiFi FAILED!"); oled_flush();
+        s_ap_mode = true;
+        esp_netif_create_default_wifi_ap();
+        wifi_config_t ap_cfg = { .ap = { .ssid = "Greeny-Setup", .password = "", .ssid_len = 0, .authmode = WIFI_AUTH_OPEN, .max_connection = 4 } };
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_cfg));
+        strcpy(s_ip_str, "192.168.4.1");
     }
 }
 
@@ -687,6 +710,7 @@ void app_main(void)
     if (r == ESP_ERR_NVS_NO_FREE_PAGES || r == ESP_ERR_NVS_NEW_VERSION_FOUND) { nvs_flash_erase(); nvs_flash_init(); }
     adc_init_all(); relay_init_all(); ds18b20_init(); oled_setup();
     wifi_init_all();
+    if (s_ap_mode) { wifi_manager_start(); }
     xTaskCreate(oled_task, "oled", 3072, NULL, 3, NULL);
 #ifdef CONFIG_USE_WEBSOCKET
     xTaskCreate(telemetry_ws_task, "ws_tel", 8192, NULL, 5, NULL);
