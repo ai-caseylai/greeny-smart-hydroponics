@@ -82,7 +82,8 @@ export const onRequest: PagesFunction<Env>[] = [
 
     if (device_id) { query += ' AND t.device_id = ?'; params.push(device_id); }
     if (office_id) {
-      query += ' AND t.device_id IN (SELECT r.device_id FROM racks r WHERE r.office_id = ? AND r.device_id IS NOT NULL)';
+      // 透過 racks 關聯 + 無 rack 的獨立裝置（如 WSD-001）
+      query += ' AND (t.device_id IN (SELECT r.device_id FROM racks r WHERE r.office_id = ? AND r.device_id IS NOT NULL) OR t.device_id IN (SELECT d.id FROM devices d WHERE d.id NOT IN (SELECT r2.device_id FROM racks r2 WHERE r2.device_id IS NOT NULL)))';
       params.push(Number(office_id));
     }
     query += ' ORDER BY t.ts_ms DESC LIMIT ?';
