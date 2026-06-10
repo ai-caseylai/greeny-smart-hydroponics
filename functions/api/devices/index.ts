@@ -12,7 +12,7 @@ export const onRequest: PagesFunction<Env>[] = [
       const params: unknown[] = [];
 
       if (officeId) {
-        query += ' AND d.id IN (SELECT r.device_id FROM racks r WHERE r.office_id = ? AND r.device_id IS NOT NULL)';
+        query += ' AND (d.id IN (SELECT r.device_id FROM racks r WHERE r.office_id = ? AND r.device_id IS NOT NULL) OR d.id IN (SELECT d2.id FROM devices d2 WHERE d2.id NOT IN (SELECT r2.device_id FROM racks r2 WHERE r2.device_id IS NOT NULL)))';
         params.push(Number(officeId));
       }
 

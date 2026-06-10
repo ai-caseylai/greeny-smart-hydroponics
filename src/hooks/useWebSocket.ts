@@ -31,7 +31,7 @@ export function useWebSocket(officeId: number | null) {
     const token = getToken()
     if (!token) return
 
-    const wsBase = import.meta.env.VITE_WS_URL || 'wss://greeny-ws.ai-caseylai.workers.dev'
+    const wsBase = import.meta.env.VITE_WS_URL || 'wss://greeny-ws.techforliving.net'
     const wsUrl = `${wsBase}/ws?dashboard=1&office_id=${officeId}&token=${token}`
 
     const ws = new WebSocket(wsUrl)

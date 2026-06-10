@@ -14,7 +14,7 @@ menu "Greeny Sensor Configuration"
 
     config OFFICE_ID
         string "Office ID"
-        default "1"
+        default "2"
 
     config WS_HOST
         string "WebSocket Host"
