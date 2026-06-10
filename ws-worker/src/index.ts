@@ -37,6 +37,10 @@ export default {
         'INSERT INTO relay_queue (device_id, relay1, relay2, ph_cal) VALUES (?, ?, ?, ?)'
       ).bind(body.device_id, body.relay1 ?? null, body.relay2 ?? null, body.ph_cal ?? null).run();
 
+      await env.DB.prepare(
+        'INSERT INTO relay_log (device_id, relay1, relay2, ph_cal, status) VALUES (?, ?, ?, ?, ?)'
+      ).bind(body.device_id, body.relay1 ?? null, body.relay2 ?? null, body.ph_cal ?? null, 'sent').run();
+
       return new Response(JSON.stringify({ ok: true }), { headers: CORS });
     }
 

@@ -180,6 +180,29 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
   const [cmdLog, setCmdLog] = useState<{ time: string; action: string; status: string; ackTime?: string }[]>([])
   const [showLog, setShowLog] = useState(false)
 
+  // 載入 SQL 中的命令日誌
+  useEffect(() => {
+    const loadLogs = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const apiBase = (import.meta as any).env?.VITE_API_BASE || '/api'
+        const res = await fetch(`${apiBase}/relay-logs?device_id=${d.id}&limit=20`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setCmdLog(data.map((r: any) => ({
+            time: new Date(r.created_at * 1000).toLocaleTimeString(),
+            action: r.ph_cal != null ? `pH Cal=${r.ph_cal}` : `R1=${r.relay1 ?? '-'} R2=${r.relay2 ?? '-'}`,
+            status: r.status === 'ack' ? '✓ 已執行' : '已發送',
+            ackTime: r.status === 'ack' ? new Date(r.created_at * 1000).toLocaleTimeString() : undefined,
+          })))
+        }
+      } catch {}
+    }
+    loadLogs()
+  }, [d.id, latestT?.created_at])
+
   const toggleWithStatus = (num: number, value: boolean) => {
     const v = value ? 1 : 0
     const action = `R${num}=${v ? 'ON' : 'OFF'}`

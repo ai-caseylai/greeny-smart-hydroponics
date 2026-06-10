@@ -123,6 +123,10 @@ export class DeviceHub {
           ws.send(JSON.stringify(cmd));
           await this.env.DB.prepare('DELETE FROM relay_queue WHERE device_id = ? AND id <= ?')
             .bind(deviceId, relayCmd.id).run();
+          // 更新 relay_log 狀態為 ack
+          await this.env.DB.prepare(
+            "UPDATE relay_log SET status = 'ack' WHERE device_id = ? AND status = 'sent' AND id = (SELECT MAX(id) FROM relay_log WHERE device_id = ?)"
+          ).bind(deviceId, deviceId).run();
         }
 
         // Update last_seen on every telemetry
@@ -199,6 +203,9 @@ export class DeviceHub {
             if (relayCmd.ph_cal !== null) cmd.ph_cal = relayCmd.ph_cal;
             ws.send(JSON.stringify(cmd));
             await this.env.DB.prepare('DELETE FROM relay_queue WHERE device_id = ? AND id <= ?').bind(deviceId, relayCmd.id).run();
+            await this.env.DB.prepare(
+              "UPDATE relay_log SET status = 'ack' WHERE device_id = ? AND status = 'sent' AND id = (SELECT MAX(id) FROM relay_log WHERE device_id = ?)"
+            ).bind(deviceId, deviceId).run();
           }
         }
         break;
