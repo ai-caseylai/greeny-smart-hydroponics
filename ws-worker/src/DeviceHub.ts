@@ -179,6 +179,11 @@ export class DeviceHub {
         break;
       }
 
+      case 'relay_ack': {
+        this.broadcastToDashboards(data);
+        break;
+      }
+
       case 'ping': {
         ws.send(JSON.stringify({ type: 'pong' }));
         // Check relay queue on ping too (for faster response)

@@ -461,6 +461,11 @@ static void handle_incoming_message(const char *data, int len)
             cJSON *v = cJSON_GetObjectItem(r, key);
             if (v && cJSON_IsNumber(v)) set_relay(i, v->valueint);
         }
+        // 回傳 ACK 確認執行
+        char ack[128];
+        snprintf(ack, sizeof(ack), "{\"type\":\"relay_ack\",\"relay1\":%d,\"relay2\":%d,\"ph_cal\":%.2f}",
+                 s_relay[0], s_relay[1], s_ph_cal);
+        if (s_ws_connected) ws_send_frame(ack);
     } else if (t && cJSON_IsString(t) && strcmp(t->valuestring, "ping") == 0) {
         if (s_ws_connected) ws_send_frame("{\"type\":\"pong\"}");
     }
