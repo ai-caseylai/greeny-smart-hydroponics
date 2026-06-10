@@ -166,16 +166,27 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
     if (actual === sent.val) {
       setRelayStatus('ok')
       sentRelayRef.current = null
+      const now = new Date().toLocaleTimeString()
+      setCmdLog(prev => {
+        const updated = [...prev]
+        if (updated[0]) updated[0] = { ...updated[0], status: '✓ 執行成功' }
+        return updated
+      })
       setTimeout(() => setRelayStatus('idle'), 2000)
     }
   }, [latestT?.relay1, latestT?.relay2, latestT])
 
+  const [cmdLog, setCmdLog] = useState<{ time: string; action: string; status: string }[]>([])
+
   const toggleWithStatus = (num: number, value: boolean) => {
     const v = value ? 1 : 0
+    const action = `R${num}=${v ? 'ON' : 'OFF'}`
+    const now = new Date().toLocaleTimeString()
     if (num === 1) { setRelay1(value); sendRelay(d.id, v, relay2 ? 1 : 0) }
     else { setRelay2(value); sendRelay(d.id, relay1 ? 1 : 0, v) }
     sentRelayRef.current = { num, val: v }
     setRelayStatus('waiting')
+    setCmdLog(prev => [{ time: now, action, status: '已發送' }, ...prev].slice(0, 20))
   }
 
   const statusLabel: Record<string, { text: string; color: string }> = {
@@ -243,6 +254,22 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
         })}
         <span className={`text-[10px] ml-auto ${statusLabel[relayStatus].color}`}>{statusLabel[relayStatus].text}</span>
       </div>
+
+      {/* Command log */}
+      {cmdLog.length > 0 && (
+        <div className="pt-2 border-t border-border/50 mb-2">
+          <p className="text-[10px] text-gray-400 mb-1">命令日誌</p>
+          <div className="max-h-24 overflow-y-auto space-y-0.5">
+            {cmdLog.slice(0, 5).map((entry, i) => (
+              <div key={i} className="flex items-center gap-2 text-[10px]">
+                <span className="text-gray-400 w-10">{entry.time}</span>
+                <span className="text-gray-600">{entry.action}</span>
+                <span className={entry.status.includes('✓') ? 'text-green-500' : 'text-blue-400'}>{entry.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* pH Calibration */}
       <div className="pt-2 border-t border-border/50 mb-2">
