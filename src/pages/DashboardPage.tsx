@@ -72,7 +72,7 @@ export default function DashboardPage() {
     { label: t('todayAlerts'), value: stats?.today_alerts || 0, icon: AlertTriangle, color: '#FF9800' },
     { label: t('avgPH'), value: stats?.avg_ph?.toFixed(1) || '-', icon: Droplets, color: '#2196F3' },
     { label: t('avgTemp'), value: stats?.avg_temp ? `${stats.avg_temp.toFixed(0)}°C` : '-', icon: Thermometer, color: '#E91E63' },
-    { label: 'NDVI', value: stats?.avg_ndvi?.toFixed(2) || '-', icon: Leaf, color: '#66BB6A' },
+    { label: 'TDS', value: stats?.avg_ec != null ? stats.avg_ec.toFixed(0) : '-', icon: Zap, color: '#66BB6A' },
   ]
 
   const trendMap = new Map<string, { ph: number[]; temp: number[] }>()
@@ -167,7 +167,7 @@ export default function DashboardPage() {
                 <th className="px-4 py-3">pH</th>
                 <th className="px-4 py-3">EC (μS/cm)</th>
                 <th className="px-4 py-3">°C</th>
-                <th className="px-4 py-3">NDVI</th>
+                <th className="px-4 py-3">TDS</th>
                 <th className="px-4 py-3">{t('common:status.online', { defaultValue: 'Status' })}</th>
                 <th className="px-4 py-3">{t('lastReport')}</th>
               </tr>
@@ -183,9 +183,9 @@ export default function DashboardPage() {
                     <td className="px-4 py-3 text-gray-600">{officeName}</td>
                     <td className="px-4 py-3 text-gray-600">{d.location}</td>
                     <td className="px-4 py-3">{lt?.ph?.toFixed(1) || '-'}</td>
-                    <td className="px-4 py-3">{lt?.ec || '-'}</td>
+                    <td className="px-4 py-3">{lt?.ec != null ? lt.ec.toFixed(1) : '-'}</td>
                     <td className="px-4 py-3">{lt?.water_temp?.toFixed(1) || '-'}</td>
-                    <td className="px-4 py-3">{lt?.ndvi?.toFixed(2) || '-'}</td>
+                    <td className="px-4 py-3">{lt?.ec != null ? lt.ec.toFixed(0) : '-'}</td>
                     <td className="px-4 py-3"><span className="flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${statusColors[d.status] || 'bg-gray-400'}`} />{statusLabels[d.status] || d.status}</span></td>
                     <td className="px-4 py-3 text-xs text-gray-400">{d.last_seen ? timeAgo(d.last_seen) : '-'}</td>
                   </tr>

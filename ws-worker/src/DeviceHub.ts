@@ -94,7 +94,12 @@ export class DeviceHub {
           data.relay1 || 0, data.relay2 || 0, tsMs, now
         ).run().catch(() => {});
 
-        if (ph && (ph < 5.5 || ph > 7.0)) {
+        // Update last_seen on every telemetry
+        this.env.DB.prepare(
+          `UPDATE devices SET last_seen = ?, status = 'online' WHERE id = ?`
+        ).bind(now, deviceId).run().catch(() => {});
+
+        if (ph && (ph < 5.5 || ph > 8.5)) {
           this.env.DB.prepare(
             `INSERT INTO alerts (device_id, type, message, severity, created_at) VALUES (?, 'ph_abnormal', ?, 'warning', ?)`
           ).bind(deviceId, `${deviceId} pH異常：${ph}`, now).run().catch(() => {});
