@@ -9,7 +9,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from 'recharts'
-import { Cpu, AlertTriangle, Droplets, Thermometer, RefreshCw, Leaf } from 'lucide-react'
+import { Cpu, AlertTriangle, Droplets, Thermometer, RefreshCw, Leaf, Zap } from 'lucide-react'
 import { timeAgo } from '../lib/utils'
 import type { DashboardStats } from '../types'
 
