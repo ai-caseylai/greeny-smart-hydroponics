@@ -416,11 +416,11 @@ static char *build_telemetry_ws_json(void)
     cJSON_AddNumberToObject(r, "ph", s_ph);
     cJSON_AddNumberToObject(r, "tds", s_tds);
     cJSON_AddNumberToObject(r, "water_temp", s_water_temp);
+    cJSON_AddNumberToObject(r, "ph_cal", s_ph_cal);
     for (int i = 0; i < RELAY_COUNT; i++) {
         char key[8]; snprintf(key, sizeof(key), "relay%d", i + 1);
         cJSON_AddNumberToObject(r, key, s_relay[i]);
     }
-    // ts_ms 由 Worker 端 Date.now() 填入
     char *j = cJSON_PrintUnformatted(r); cJSON_Delete(r); return j;
 }
 #else
@@ -431,6 +431,7 @@ static char *build_telemetry_http_json(void)
     cJSON_AddNumberToObject(r, "ph", s_ph);
     cJSON_AddNumberToObject(r, "tds", s_tds);
     cJSON_AddNumberToObject(r, "water_temp", s_water_temp);
+    cJSON_AddNumberToObject(r, "ph_cal", s_ph_cal);
     for (int i = 0; i < RELAY_COUNT; i++) {
         char key[8]; snprintf(key, sizeof(key), "relay%d", i + 1);
         cJSON_AddNumberToObject(r, key, s_relay[i]);
@@ -647,19 +648,25 @@ static void ws_reset(void) {
 
 static void telemetry_ws_task(void *pv)
 {
+    int64_t last_ping = 0;
     while (1) {
         if (!s_ws_connected) {
             ESP_LOGI(TAG, "WSS offline — retry in 3s");
             vTaskDelay(pdMS_TO_TICKS(3000));
             websocket_init();
+            last_ping = 0;
             continue;
         }
-        // Watchdog: no activity for >65s → force reconnect
         int64_t idle_ms = (esp_timer_get_time() - s_last_ws_activity) / 1000;
         if (idle_ms > WS_WATCHDOG_MS) {
             ESP_LOGW(TAG, "WSS watchdog timeout (%lld ms idle), reconnecting...", idle_ms);
             ws_reset();
             continue;
+        }
+        // 1 秒心跳 — DO 收到 ping 會檢查 relay 隊列
+        if (esp_timer_get_time() - last_ping > 1000000LL) {
+            ws_send_frame("{\"type\":\"ping\"}");
+            last_ping = esp_timer_get_time();
         }
         read_temp_sensor();
         char *j = build_telemetry_ws_json();
@@ -687,7 +694,7 @@ static void relay_checker_task(void *pv) {
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(2000));  // 每 2 秒檢查
         if (!s_wifi_connected) continue;
-        esp_http_client_config_t rc = { .url = "https://greenie.techforliving.net/api/relay?device_id=" CONFIG_DEVICE_ID, .method = HTTP_METHOD_GET, .timeout_ms = 3000, .crt_bundle_attach = esp_crt_bundle_attach };
+        esp_http_client_config_t rc = { .url = "https://greeny-ws.techforliving.net/relay?office_id=" CONFIG_OFFICE_ID "&device_id=" CONFIG_DEVICE_ID, .method = HTTP_METHOD_GET, .timeout_ms = 3000, .crt_bundle_attach = esp_crt_bundle_attach };
         esp_http_client_handle_t rq = esp_http_client_init(&rc);
         if (esp_http_client_perform(rq) == ESP_OK && esp_http_client_get_status_code(rq) == 200) {
             char buf[256]; int rlen = esp_http_client_read(rq, buf, sizeof(buf) - 1);
@@ -746,7 +753,6 @@ void app_main(void)
 #ifdef CONFIG_USE_WEBSOCKET
     xTaskCreate(telemetry_ws_task, "ws_tel", 8192, NULL, 5, NULL);
     xTaskCreate(ws_reader_task, "ws_rdr", 4096, NULL, 4, NULL);
-    xTaskCreate(relay_checker_task, "relay_ck", 8192, NULL, 3, NULL);
 #else
     xTaskCreate(telemetry_task, "http_tel", 8192, NULL, 5, NULL);
 #endif

@@ -111,6 +111,20 @@ export class DeviceHub {
           data.relay1 || 0, data.relay2 || 0, tsMs, now
         ).run().catch(() => {});
 
+        // Check relay queue for this device
+        const relayCmd = await this.env.DB.prepare(
+          'SELECT id, relay1, relay2, ph_cal FROM relay_queue WHERE device_id = ? ORDER BY id DESC LIMIT 1'
+        ).bind(deviceId).first<{ id: number; relay1: number | null; relay2: number | null; ph_cal: number | null }>();
+        if (relayCmd) {
+          const cmd: any = { type: 'relay_cmd' };
+          if (relayCmd.relay1 !== null) cmd.relay1 = relayCmd.relay1;
+          if (relayCmd.relay2 !== null) cmd.relay2 = relayCmd.relay2;
+          if (relayCmd.ph_cal !== null) cmd.ph_cal = relayCmd.ph_cal;
+          ws.send(JSON.stringify(cmd));
+          await this.env.DB.prepare('DELETE FROM relay_queue WHERE device_id = ? AND id <= ?')
+            .bind(deviceId, relayCmd.id).run();
+        }
+
         // Update last_seen on every telemetry
         this.env.DB.prepare(
           `UPDATE devices SET last_seen = ?, status = 'online' WHERE id = ?`
@@ -167,6 +181,21 @@ export class DeviceHub {
 
       case 'ping': {
         ws.send(JSON.stringify({ type: 'pong' }));
+        // Check relay queue on ping too (for faster response)
+        const deviceId = [...this.devices.entries()].find(([, s]) => s === ws)?.[0];
+        if (deviceId) {
+          const relayCmd = await this.env.DB.prepare(
+            'SELECT id, relay1, relay2, ph_cal FROM relay_queue WHERE device_id = ? ORDER BY id DESC LIMIT 1'
+          ).bind(deviceId).first<{ id: number; relay1: number | null; relay2: number | null; ph_cal: number | null }>();
+          if (relayCmd) {
+            const cmd: any = { type: 'relay_cmd' };
+            if (relayCmd.relay1 !== null) cmd.relay1 = relayCmd.relay1;
+            if (relayCmd.relay2 !== null) cmd.relay2 = relayCmd.relay2;
+            if (relayCmd.ph_cal !== null) cmd.ph_cal = relayCmd.ph_cal;
+            ws.send(JSON.stringify(cmd));
+            await this.env.DB.prepare('DELETE FROM relay_queue WHERE device_id = ? AND id <= ?').bind(deviceId, relayCmd.id).run();
+          }
+        }
         break;
       }
     }

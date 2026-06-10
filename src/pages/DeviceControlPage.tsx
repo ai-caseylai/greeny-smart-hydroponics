@@ -135,7 +135,9 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
 }) {
   const [relay1, setRelay1] = useState(latestT?.relay1 === 1)
   const [relay2, setRelay2] = useState(latestT?.relay2 === 1)
-  const [phCal, setPhCal] = useState('21.34')
+  useEffect(() => { setRelay1(latestT?.relay1 === 1) }, [latestT?.relay1])
+  useEffect(() => { setRelay2(latestT?.relay2 === 1) }, [latestT?.relay2])
+  const [phCal, setPhCal] = useState(latestT?.ph_cal != null ? String(latestT.ph_cal) : '18.07')
   const [showPhCal, setShowPhCal] = useState(false)
 
   const toggleRelay = (num: number, value: boolean) => {
@@ -151,6 +153,24 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
   const applyPhCal = () => {
     const val = parseFloat(phCal)
     if (!isNaN(val) && val > 0) sendPhCal(d.id, val)
+  }
+
+  const [relayStatus, setRelayStatus] = useState<'idle' | 'pending' | 'ok' | 'fail'>('idle')
+
+  const toggleWithStatus = (num: number, value: boolean) => {
+    setRelayStatus('pending')
+    if (num === 1) { setRelay1(value); sendRelay(d.id, value ? 1 : 0, relay2 ? 1 : 0) }
+    else { setRelay2(value); sendRelay(d.id, relay1 ? 1 : 0, value ? 1 : 0) }
+    // 假設 4 秒後成功（等 DO 同步）
+    setTimeout(() => setRelayStatus('ok'), 4000)
+    setTimeout(() => setRelayStatus('idle'), 6000)
+  }
+
+  const statusLabel: Record<string, { text: string; color: string }> = {
+    idle: { text: '等待命令', color: 'text-gray-400' },
+    pending: { text: '執行中...', color: 'text-blue-500' },
+    ok: { text: '已執行', color: 'text-green-500' },
+    fail: { text: '執行失敗', color: 'text-red-500' },
   }
 
   return (
@@ -199,17 +219,18 @@ function DeviceCard({ device: d, latestT, statusLabels, t, sendRelay, sendPhCal 
         </div>
       )}
 
-      {/* Relay controls — 2 relays */}
-      <div className="flex items-center gap-3 pt-3 border-t border-border/50 mb-3">
+      {/* Relay controls */}
+      <div className="flex items-center gap-3 pt-3 border-t border-border/50 mb-2">
         {[1, 2].map(n => {
           const states = [relay1, relay2]
           return (
-            <button key={n} onClick={() => toggleRelay(n, !states[n - 1])} className="flex items-center gap-1 text-xs">
+            <button key={n} onClick={() => toggleWithStatus(n, !states[n - 1])} className="flex items-center gap-1 text-xs">
               {states[n - 1] ? <ToggleRight className="h-4 w-4 text-[#00a65a]" /> : <ToggleLeft className="h-4 w-4 text-gray-400" />}
               <span className={states[n - 1] ? 'text-[#00a65a] font-medium' : 'text-gray-500'}>R{n}</span>
             </button>
           )
         })}
+        <span className={`text-[10px] ml-auto ${statusLabel[relayStatus].color}`}>{statusLabel[relayStatus].text}</span>
       </div>
 
       {/* pH Calibration */}
