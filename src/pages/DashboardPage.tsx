@@ -71,8 +71,8 @@ export default function DashboardPage() {
     { label: t('onlineDevices'), value: `${stats?.online_devices || 0}/${stats?.total_devices || 0}`, icon: Cpu, color: '#4CAF50' },
     { label: t('todayAlerts'), value: stats?.today_alerts || 0, icon: AlertTriangle, color: '#FF9800' },
     { label: t('avgPH'), value: stats?.avg_ph?.toFixed(1) || '-', icon: Droplets, color: '#2196F3' },
-    { label: t('avgTemp'), value: stats?.avg_temp ? `${stats.avg_temp.toFixed(0)}°C` : '-', icon: Thermometer, color: '#E91E63' },
-    { label: 'TDS', value: stats?.avg_ec != null ? stats.avg_ec.toFixed(0) : '-', icon: Zap, color: '#66BB6A' },
+    { label: t('waterTemp', { defaultValue: '水溫' }), value: stats?.avg_temp ? `${stats.avg_temp.toFixed(0)}°C` : '-', icon: Thermometer, color: '#E91E63' },
+    { label: 'TDS', value: stats?.avg_ec != null ? stats.avg_ec.toFixed(0) + ' ppm' : '-', icon: Zap, color: '#FF9800' },
   ]
 
   const trendMap = new Map<string, { ph: number[]; temp: number[] }>()
